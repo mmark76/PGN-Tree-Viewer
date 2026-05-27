@@ -61,10 +61,29 @@
       border-radius: var(--radius);
       padding: 14px 16px;
       box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 10px;
     }
 
     input[type="file"] {
       max-width: 280px;
+    }
+
+    button {
+      border: none;
+      border-radius: 10px;
+      background: var(--main);
+      color: #ffffff;
+      padding: 9px 12px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    button:hover {
+      opacity: 0.92;
     }
 
     .workspace {
@@ -246,6 +265,10 @@
         align-items: flex-start;
       }
 
+      .upload-box {
+        justify-content: flex-start;
+      }
+
       .side-panel {
         position: static;
       }
@@ -257,10 +280,11 @@
     <header>
       <div>
         <h1>Chess Variation Tree Prototype</h1>
-        <div class="subtitle">Root at the bottom. Main trunk upward. 8 variations: 4 left and 4 right.</div>
+        <div id="subtitle" class="subtitle">Root at the bottom. Main trunk upward. Variations are generated dynamically.</div>
       </div>
 
       <div class="upload-box">
+        <button id="variationButton" type="button">Set variations</button>
         <input id="pgnInput" type="file" accept=".pgn,text/plain" />
       </div>
     </header>
@@ -289,56 +313,115 @@
 
         <div class="info-card">
           <h2>PGN Import</h2>
-          <p class="note">This prototype accepts a PGN file, but the visual parser is still simplified. The current layout demonstrates the exact tree geometry: one trunk and eight side variations.</p>
+          <p class="note">This prototype accepts a PGN file, but the visual parser is still simplified. The current layout demonstrates dynamic tree geometry based on the selected number of variations.</p>
         </div>
       </aside>
     </section>
   </main>
 
   <script>
-    const sampleTree = {
-      id: "start",
-      move: "Start",
-      type: "start",
-      x: 520,
-      y: 660,
-      children: [
-        {
-          id: "m1",
-          move: "1.e4",
-          type: "main",
-          x: 520,
-          y: 570,
-          children: [
-            {
-              id: "m2",
-              move: "1...c5",
-              type: "main",
-              x: 520,
-              y: 480,
-              children: [
-                mainLine(),
-                variation("v1", "Var 1", 160, ["2.Nf3", "2...e6", "3.d4"]),
-                variation("v2", "Var 2", 280, ["2.g3", "2...d6", "3.Bg2"]),
-                variation("v3", "Var 3", 400, ["2.d4", "2...Nf6", "3.c4"]),
-                variation("v4", "Var 4", 480, ["2.c3", "2...e6", "3.d4"]),
-                variation("v5", "Var 5", 640, ["2.Nc3", "2...Nc6", "3.d4"]),
-                variation("v6", "Var 6", 760, ["2.Bc4", "2...e5", "3.d3"]),
-                variation("v7", "Var 7", 880, ["2.f4", "2...exf4", "3.Bc4"]),
-                variation("v8", "Var 8", 1000, ["2.b3", "2...b6", "3.Bb2"])
-              ]
-            }
-          ]
-        }
-      ]
-    };
+    const canvas = document.getElementById("treeCanvas");
+    const svg = document.getElementById("lines");
+    const selectedMove = document.getElementById("selectedMove");
+    const selectedPath = document.getElementById("selectedPath");
+    const pgnInput = document.getElementById("pgnInput");
+    const variationButton = document.getElementById("variationButton");
+    const subtitle = document.getElementById("subtitle");
 
-    function mainLine() {
-      return chain("main", 520, 390, ["2.Nf3", "2...d6", "3.d4", "3...cxd4", "4.Nxd4"], "main");
+    const centerX = 520;
+    const branchStartY = 390;
+    const verticalGap = 78;
+    const variationGap = 120;
+    const minimumCanvasWidth = 1040;
+
+    let selectedNodeId = "start";
+    let allNodes = [];
+    let parentMap = new Map();
+    let currentTree = null;
+    let currentVariationCount = 8;
+
+    function askForVariationCount(defaultValue = currentVariationCount) {
+      const answer = prompt("How many variations should be created?", String(defaultValue));
+      const parsedValue = Number.parseInt(answer, 10);
+
+      if (Number.isNaN(parsedValue) || parsedValue < 0) {
+        alert("Please enter a valid number of variations.");
+        return defaultValue;
+      }
+
+      return Math.min(parsedValue, 40);
     }
 
-    function variation(idPrefix, label, x, moves) {
-      return chain(idPrefix, x, 390, moves, "variation");
+    function buildSampleTree(variationCount) {
+      const branches = [mainLine(), ...createVariations(variationCount)];
+
+      return {
+        id: "start",
+        move: "Start",
+        type: "start",
+        x: centerX,
+        y: 660,
+        children: [
+          {
+            id: "m1",
+            move: "1.e4",
+            type: "main",
+            x: centerX,
+            y: 570,
+            children: [
+              {
+                id: "m2",
+                move: "1...c5",
+                type: "main",
+                x: centerX,
+                y: 480,
+                children: branches
+              }
+            ]
+          }
+        ]
+      };
+    }
+
+    function mainLine() {
+      return chain("main", centerX, branchStartY, ["2.Nf3", "2...d6", "3.d4", "3...cxd4", "4.Nxd4"], "main");
+    }
+
+    function createVariations(count) {
+      const variations = [];
+
+      for (let i = 1; i <= count; i++) {
+        const x = getVariationX(i, count);
+        variations.push(variation(`v${i}`, x, createVariationMoves(i)));
+      }
+
+      updateCanvasWidth(count);
+      return variations;
+    }
+
+    function getVariationX(index, total) {
+      const middle = (total + 1) / 2;
+      const offset = index - middle;
+      return centerX + offset * variationGap;
+    }
+
+    function createVariationMoves(index) {
+      const templates = [
+        ["2.Nf3", "2...e6", "3.d4"],
+        ["2.g3", "2...d6", "3.Bg2"],
+        ["2.d4", "2...Nf6", "3.c4"],
+        ["2.c3", "2...e6", "3.d4"],
+        ["2.Nc3", "2...Nc6", "3.d4"],
+        ["2.Bc4", "2...e5", "3.d3"],
+        ["2.f4", "2...exf4", "3.Bc4"],
+        ["2.b3", "2...b6", "3.Bb2"]
+      ];
+
+      return templates[(index - 1) % templates.length];
+    }
+
+    function variation(idPrefix, x, moves) {
+      return chain(idPrefix, x, branchStartY, moves, "variation");
     }
 
     function chain(idPrefix, x, startY, moves, type) {
@@ -358,7 +441,7 @@
           move: moves[i],
           type,
           x,
-          y: startY - i * 78,
+          y: startY - i * verticalGap,
           children: []
         };
         current.children.push(next);
@@ -371,7 +454,7 @@
           move: labelFromPrefix(idPrefix),
           type: "variation",
           x,
-          y: startY - moves.length * 78,
+          y: startY - moves.length * verticalGap,
           children: []
         });
       }
@@ -383,15 +466,20 @@
       return `Var ${prefix.replace("v", "")}`;
     }
 
-    const canvas = document.getElementById("treeCanvas");
-    const svg = document.getElementById("lines");
-    const selectedMove = document.getElementById("selectedMove");
-    const selectedPath = document.getElementById("selectedPath");
-    const pgnInput = document.getElementById("pgnInput");
+    function updateCanvasWidth(variationCount) {
+      const dynamicWidth = Math.max(minimumCanvasWidth, 260 + variationCount * variationGap);
+      canvas.style.minWidth = `${dynamicWidth}px`;
+    }
 
-    let selectedNodeId = "start";
-    let allNodes = [];
-    let parentMap = new Map();
+    function resetTree(variationCount) {
+      currentVariationCount = variationCount;
+      selectedNodeId = "start";
+      selectedMove.textContent = "Start";
+      selectedPath.textContent = "Click a move node to inspect the path.";
+      subtitle.textContent = `Root at the bottom. Main trunk upward. ${variationCount} variation${variationCount === 1 ? "" : "s"} generated dynamically.`;
+      currentTree = buildSampleTree(variationCount);
+      renderTree(currentTree);
+    }
 
     function renderTree(tree) {
       canvas.querySelectorAll(".node").forEach(node => node.remove());
@@ -443,7 +531,7 @@
       const node = allNodes.find(item => item.id === id);
       selectedMove.textContent = node ? node.move : "Start";
       selectedPath.textContent = buildPath(id).join(" → ");
-      renderTree(sampleTree);
+      renderTree(currentTree);
     }
 
     function buildPath(id) {
@@ -461,6 +549,10 @@
       return path;
     }
 
+    variationButton.addEventListener("click", () => {
+      resetTree(askForVariationCount());
+    });
+
     pgnInput.addEventListener("change", async event => {
       const file = event.target.files[0];
       if (!file) return;
@@ -469,7 +561,7 @@
       alert("PGN imported. Parser connection will be added in the next step. File size: " + text.length + " characters.");
     });
 
-    renderTree(sampleTree);
+    resetTree(askForVariationCount());
   </script>
 </body>
 </html>
