@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chess Variation Tree Prototype</title>
+  <style>
+    :root {
+      --bg: #f8fafc;
+      --panel: #ffffff;
+      --text: #1f2937;
+      --muted: #6b7280;
+      --line: #9ca3af;
+      --main: #2563eb;
+      --variation: #7c3aed;
+      --node-bg: #ffffff;
+      --radius: 14px;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: Arial, Helvetica, sans-serif;
+      background: radial-gradient(circle at top, #ffffff 0%, var(--bg) 70%);
+      color: var(--text);
+    }
+
+    .app {
+      min-height: 100vh;
+      padding: 28px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 20px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 24px;
+      font-weight: 700;
+    }
+
+    .subtitle {
+      margin-top: 6px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .upload-box {
+      background: var(--panel);
+      border: 1px solid #e5e7eb;
+      border-radius: var(--radius);
+      padding: 14px 16px;
+      box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
+    }
+
+    input[type="file"] {
+      max-width: 280px;
+    }
+
+    .workspace {
+      display: grid;
+      grid-template-columns: 1fr 320px;
+      gap: 20px;
+      align-items: start;
+    }
+
+    .tree-panel,
+    .side-panel {
+      background: rgba(255, 255, 255, 0.9);
+      border: 1px solid #e5e7eb;
+      border-radius: 22px;
+      box-shadow: 0 14px 40px rgba(15, 23, 42, 0.07);
+    }
+
+    .tree-panel {
+      min-height: 760px;
+      overflow: auto;
+      padding: 28px;
+    }
+
+    .side-panel {
+      padding: 18px;
+      position: sticky;
+      top: 20px;
+    }
+
+    .tree-canvas {
+      position: relative;
+      min-width: 1040px;
+      height: 720px;
+      margin: 0 auto;
+    }
+
+    .node {
+      position: absolute;
+      min-width: 84px;
+      padding: 10px 12px;
+      border-radius: 14px;
+      background: var(--node-bg);
+      border: 1.8px solid #cbd5e1;
+      text-align: center;
+      font-size: 14px;
+      font-weight: 600;
+      box-shadow: 0 6px 14px rgba(15, 23, 42, 0.06);
+      cursor: pointer;
+      user-select: none;
+      transform: translate(-50%, -50%);
+      z-index: 2;
+    }
+
+    .node:hover {
+      transform: translate(-50%, -50%) scale(1.04);
+    }
+
+    .node.start {
+      border-color: #9ca3af;
+      color: #111827;
+      min-width: 100px;
+    }
+
+    .node.main {
+      border-color: var(--main);
+      color: var(--main);
+    }
+
+    .node.variation {
+      border-color: var(--variation);
+      color: var(--variation);
+    }
+
+    .node.selected {
+      background: #eff6ff;
+      outline: 3px solid rgba(37, 99, 235, 0.15);
+    }
+
+    svg.lines {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 1;
+      pointer-events: none;
+    }
+
+    .main-line {
+      stroke: var(--main);
+      stroke-width: 2.2;
+    }
+
+    .variation-line {
+      stroke: var(--line);
+      stroke-width: 1.6;
+    }
+
+    .direction {
+      text-align: center;
+      font-weight: 700;
+      color: #374151;
+      margin-bottom: 12px;
+      letter-spacing: 0.03em;
+    }
+
+    .direction span {
+      display: block;
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 400;
+      letter-spacing: 0;
+      margin-top: 4px;
+    }
+
+    .info-card {
+      border: 1px solid #e5e7eb;
+      border-radius: 16px;
+      padding: 14px;
+      margin-bottom: 14px;
+      background: #ffffff;
+    }
+
+    .info-card h2 {
+      margin: 0 0 8px;
+      font-size: 16px;
+    }
+
+    .info-card p {
+      margin: 0;
+      font-size: 14px;
+      line-height: 1.5;
+      color: var(--muted);
+    }
+
+    .selected-move {
+      font-size: 28px;
+      font-weight: 800;
+      color: var(--main);
+      margin: 10px 0;
+    }
+
+    .legend-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 14px;
+      color: var(--muted);
+      margin: 8px 0;
+    }
+
+    .legend-line {
+      width: 32px;
+      height: 3px;
+      border-radius: 3px;
+      background: var(--line);
+    }
+
+    .legend-line.main {
+      background: var(--main);
+    }
+
+    .legend-line.variation {
+      background: var(--variation);
+    }
+
+    .note {
+      font-size: 13px;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+
+    @media (max-width: 980px) {
+      .workspace {
+        grid-template-columns: 1fr;
+      }
+
+      header {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+
+      .side-panel {
+        position: static;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <header>
+      <div>
+        <h1>Chess Variation Tree Prototype</h1>
+        <div class="subtitle">Root at the bottom. Main trunk upward. 8 variations: 4 left and 4 right.</div>
+      </div>
+
+      <div class="upload-box">
+        <input id="pgnInput" type="file" accept=".pgn,text/plain" />
+      </div>
+    </header>
+
+    <section class="workspace">
+      <section class="tree-panel">
+        <div class="direction">↑ GROWS UPWARD <span>Branches open left and right. They never merge.</span></div>
+        <div id="treeCanvas" class="tree-canvas">
+          <svg id="lines" class="lines"></svg>
+        </div>
+      </section>
+
+      <aside class="side-panel">
+        <div class="info-card">
+          <h2>Selected Move</h2>
+          <div id="selectedMove" class="selected-move">Start</div>
+          <p id="selectedPath">Click a move node to inspect the path.</p>
+        </div>
+
+        <div class="info-card">
+          <h2>Legend</h2>
+          <div class="legend-row"><span class="legend-line main"></span>Main Line</div>
+          <div class="legend-row"><span class="legend-line variation"></span>Variation</div>
+          <div class="legend-row"><span class="legend-line"></span>Branch from parent move</div>
+        </div>
+
+        <div class="info-card">
+          <h2>PGN Import</h2>
+          <p class="note">This prototype accepts a PGN file, but the visual parser is still simplified. The current layout demonstrates the exact tree geometry: one trunk and eight side variations.</p>
+        </div>
+      </aside>
+    </section>
+  </main>
+
+  <script>
+    const sampleTree = {
+      id: "start",
+      move: "Start",
+      type: "start",
+      x: 520,
+      y: 660,
+      children: [
+        {
+          id: "m1",
+          move: "1.e4",
+          type: "main",
+          x: 520,
+          y: 570,
+          children: [
+            {
+              id: "m2",
+              move: "1...c5",
+              type: "main",
+              x: 520,
+              y: 480,
+              children: [
+                mainLine(),
+                variation("v1", "Var 1", 160, ["2.Nf3", "2...e6", "3.d4"]),
+                variation("v2", "Var 2", 280, ["2.g3", "2...d6", "3.Bg2"]),
+                variation("v3", "Var 3", 400, ["2.d4", "2...Nf6", "3.c4"]),
+                variation("v4", "Var 4", 480, ["2.c3", "2...e6", "3.d4"]),
+                variation("v5", "Var 5", 640, ["2.Nc3", "2...Nc6", "3.d4"]),
+                variation("v6", "Var 6", 760, ["2.Bc4", "2...e5", "3.d3"]),
+                variation("v7", "Var 7", 880, ["2.f4", "2...exf4", "3.Bc4"]),
+                variation("v8", "Var 8", 1000, ["2.b3", "2...b6", "3.Bb2"])
+              ]
+            }
+          ]
+        }
+      ]
+    };
+
+    function mainLine() {
+      return chain("main", 520, 390, ["2.Nf3", "2...d6", "3.d4", "3...cxd4", "4.Nxd4"], "main");
+    }
+
+    function variation(idPrefix, label, x, moves) {
+      return chain(idPrefix, x, 390, moves, "variation");
+    }
+
+    function chain(idPrefix, x, startY, moves, type) {
+      const root = {
+        id: `${idPrefix}-0`,
+        move: moves[0],
+        type,
+        x,
+        y: startY,
+        children: []
+      };
+
+      let current = root;
+      for (let i = 1; i < moves.length; i++) {
+        const next = {
+          id: `${idPrefix}-${i}`,
+          move: moves[i],
+          type,
+          x,
+          y: startY - i * 78,
+          children: []
+        };
+        current.children.push(next);
+        current = next;
+      }
+
+      if (type === "variation") {
+        current.children.push({
+          id: `${idPrefix}-label`,
+          move: labelFromPrefix(idPrefix),
+          type: "variation",
+          x,
+          y: startY - moves.length * 78,
+          children: []
+        });
+      }
+
+      return root;
+    }
+
+    function labelFromPrefix(prefix) {
+      return `Var ${prefix.replace("v", "")}`;
+    }
+
+    const canvas = document.getElementById("treeCanvas");
+    const svg = document.getElementById("lines");
+    const selectedMove = document.getElementById("selectedMove");
+    const selectedPath = document.getElementById("selectedPath");
+    const pgnInput = document.getElementById("pgnInput");
+
+    let selectedNodeId = "start";
+    let allNodes = [];
+    let parentMap = new Map();
+
+    function renderTree(tree) {
+      canvas.querySelectorAll(".node").forEach(node => node.remove());
+      svg.innerHTML = "";
+      allNodes = [];
+      parentMap = new Map();
+
+      walk(tree, null, node => {
+        allNodes.push(node);
+        createNode(node);
+      });
+
+      walk(tree, null, (node, parent) => {
+        if (parent) {
+          parentMap.set(node.id, parent);
+          drawLine(parent, node, node.type === "main" ? "main-line" : "variation-line");
+        }
+      });
+    }
+
+    function walk(node, parent, callback) {
+      callback(node, parent);
+      node.children.forEach(child => walk(child, node, callback));
+    }
+
+    function createNode(node) {
+      const div = document.createElement("div");
+      div.className = `node ${node.type}`;
+      if (node.id === selectedNodeId) div.classList.add("selected");
+      div.style.left = `${node.x}px`;
+      div.style.top = `${node.y}px`;
+      div.textContent = node.move;
+      div.addEventListener("click", () => selectNode(node.id));
+      canvas.appendChild(div);
+    }
+
+    function drawLine(from, to, className) {
+      const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+      line.setAttribute("x1", from.x);
+      line.setAttribute("y1", from.y - 18);
+      line.setAttribute("x2", to.x);
+      line.setAttribute("y2", to.y + 18);
+      line.setAttribute("class", className);
+      svg.appendChild(line);
+    }
+
+    function selectNode(id) {
+      selectedNodeId = id;
+      const node = allNodes.find(item => item.id === id);
+      selectedMove.textContent = node ? node.move : "Start";
+      selectedPath.textContent = buildPath(id).join(" → ");
+      renderTree(sampleTree);
+    }
+
+    function buildPath(id) {
+      const path = [];
+      let currentId = id;
+
+      while (currentId) {
+        const node = allNodes.find(item => item.id === currentId);
+        if (node) path.unshift(node.move);
+
+        const parent = parentMap.get(currentId);
+        currentId = parent ? parent.id : null;
+      }
+
+      return path;
+    }
+
+    pgnInput.addEventListener("change", async event => {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      const text = await file.text();
+      alert("PGN imported. Parser connection will be added in the next step. File size: " + text.length + " characters.");
+    });
+
+    renderTree(sampleTree);
+  </script>
+</body>
+</html>
