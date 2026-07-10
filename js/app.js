@@ -24,6 +24,10 @@ const App = (() => {
       resetTree(askForVariationCount());
     });
 
+    document.getElementById("feedbackButton")?.addEventListener("click", () => {
+      window.location.href = "mailto:markellos.markides@gmail.com?subject=PGN%20Tree%20Viewer%20Feedback";
+    });
+
     resetTree(askForVariationCount());
   }
 
