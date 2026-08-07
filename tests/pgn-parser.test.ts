@@ -15,6 +15,14 @@ const collection = `[Event "Game one"]
 
 1. c4 e5 2. Nc3 Nf6 0-1`;
 
+test("keeps the initial move tree empty before PGN import", () => {
+  const tree = buildTree([]);
+
+  assert.equal(tree.id, "start");
+  assert.equal(tree.children.length, 0);
+  assert.equal(resultCount(tree.results), 0);
+});
+
 test("parses multiple PGN games and preserves results", () => {
   const parsed = parsePgnCollection(collection);
 

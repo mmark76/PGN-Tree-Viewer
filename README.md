@@ -5,7 +5,8 @@ board, local PGN import, and move/result statistics.
 
 ## Features
 
-- curated English Opening repertoire
+- empty initial workspace that creates a tree only after PGN import
+- responsive chessboard with SVG pieces, coordinates, move highlighting, and rotation
 - interactive variation tree with collapse, expand, zoom, and scrolling
 - board position synchronized with the selected move
 - local import of one or more PGN games
