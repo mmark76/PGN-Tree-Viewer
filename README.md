@@ -36,7 +36,7 @@ Use the following build settings:
 - Framework preset: `None`
 - Production branch: `main`
 - Build command: `npm run build`
-- Build output directory: `out`
+- Build output directory: `dist/client`
 
 After the first successful deployment, connect the custom domain
 `chesstree.markellosecosystem.com` in the Pages project settings.
