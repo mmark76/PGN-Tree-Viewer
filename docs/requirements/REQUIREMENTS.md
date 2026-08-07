@@ -2,14 +2,14 @@
 
 ## Implemented
 
-- Explore a manually curated opening repertoire as a branching move tree.
+- Start with an empty move-tree workspace and the board in its initial position.
+- Create a branching move tree only after a valid PGN import.
 - Select a move and display the exact board position.
 - Navigate backward and along the most popular continuation.
 - Collapse and expand branches; zoom and scroll large trees.
 - Import local `.pgn` files containing one or more games.
 - Merge common move sequences and calculate move popularity.
 - Aggregate white wins, draws and black wins at every node.
-- Restore the default repertoire without reloading the application.
 - Support desktop, tablet and narrow mobile layouts.
 
 ## Current constraints

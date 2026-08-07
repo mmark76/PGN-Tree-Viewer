@@ -2,7 +2,7 @@
 
 ## Scope
 
-The application is a client-side chess repertoire explorer. It starts with a curated manual repertoire and can replace it with one or more games from a local PGN file. No uploaded file leaves the browser.
+The application is a client-side chess repertoire explorer. It starts with an empty tree and creates the repertoire view only after one or more games are imported from a local PGN file. No uploaded file leaves the browser.
 
 ## Data flow
 
@@ -20,7 +20,6 @@ MoveTree and PositionInspector
 
 ## Feature boundaries
 
-- `data/`: curated opening lines used by the default repertoire.
 - `services/pgnParser.ts`: converts PGN text into normalized line records.
 - `services/treeBuilder.ts`: validates moves, merges common paths and aggregates results.
 - `services/treeLayout.ts`: assigns visual coordinates without depending on React.
