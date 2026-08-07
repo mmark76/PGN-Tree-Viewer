@@ -1,0 +1,37 @@
+# PGN Tree Viewer Architecture
+
+## Scope
+
+The application is a client-side chess repertoire explorer. It starts with a curated manual repertoire and can replace it with one or more games from a local PGN file. No uploaded file leaves the browser.
+
+## Data flow
+
+```text
+Manual lines / local PGN file
+          ↓
+LineRecord[]
+          ↓
+treeBuilder
+          ↓
+TreeNode hierarchy + FEN positions + result totals
+          ↓
+MoveTree and PositionInspector
+```
+
+## Feature boundaries
+
+- `data/`: curated opening lines used by the default repertoire.
+- `services/pgnParser.ts`: converts PGN text into normalized line records.
+- `services/treeBuilder.ts`: validates moves, merges common paths and aggregates results.
+- `services/treeLayout.ts`: assigns visual coordinates without depending on React.
+- `components/MoveTree.tsx`: renders and controls the variation tree.
+- `components/ChessBoard.tsx`: renders a FEN position.
+- `components/PositionInspector.tsx`: presents the selected position and statistics.
+- `components/ExplorerShell.tsx`: owns feature state and coordinates the modules.
+
+## Decisions
+
+1. **Local-first PGN import.** Files are parsed in the browser for privacy and to avoid an unnecessary backend.
+2. **One internal tree model.** Manual data and imported games use the same `LineRecord → TreeNode` path.
+3. **Chess.js at the validation boundary.** SAN parsing and FEN generation are delegated to a focused chess rules library.
+4. **No persistence yet.** The present scope does not need accounts or a database. Persistent repertoires can be added later behind a storage service.
