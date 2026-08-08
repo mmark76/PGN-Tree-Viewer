@@ -93,14 +93,7 @@ export function ExplorerShell() {
           {hasTree ? (
             <MoveTree root={tree} selectedId={selectedId} collapsedIds={collapsedIds} zoom={zoom} onSelect={setSelectedId} onToggle={toggleBranch} />
           ) : (
-            <div className="tree-empty">
-              <div className="tree-empty-icon" aria-hidden="true">♙</div>
-              <h2>Δεν υπάρχει ακόμη δέντρο</h2>
-              <p>Εισάγετε ένα αρχείο PGN για να δημιουργηθεί το διαδραστικό δέντρο κινήσεων.</p>
-              <button className="button primary" type="button" onClick={openPgnPicker} disabled={importing}>
-                {importing ? "Ανάγνωση αρχείου…" : "Επιλογή αρχείου PGN"}
-              </button>
-            </div>
+            <div className="tree-empty" aria-label="Κενή περιοχή δέντρου κινήσεων" />
           )}
         </section>
         <PositionInspector

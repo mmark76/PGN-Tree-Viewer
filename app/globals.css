@@ -248,43 +248,10 @@ button {
 .tree-empty {
   min-height: 650px;
   height: calc(100vh - 166px);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-direction: column;
-  padding: 42px 24px;
-  text-align: center;
   background-image:
     linear-gradient(rgba(23, 63, 50, 0.026) 1px, transparent 1px),
     linear-gradient(90deg, rgba(23, 63, 50, 0.026) 1px, transparent 1px);
   background-size: 28px 28px;
-}
-
-.tree-empty-icon {
-  width: 70px;
-  height: 70px;
-  display: grid;
-  place-items: center;
-  margin-bottom: 18px;
-  border: 1px solid #cfd5c9;
-  border-radius: 22px;
-  background: #fffef9;
-  color: var(--forest);
-  box-shadow: 0 12px 28px rgba(33, 43, 37, 0.1);
-  font-size: 38px;
-}
-
-.tree-empty h2 {
-  margin: 0;
-  font-family: Georgia, serif;
-  font-size: 24px;
-}
-
-.tree-empty p {
-  max-width: 430px;
-  margin: 10px 0 22px;
-  color: var(--muted);
-  line-height: 1.6;
 }
 
 .notice {
