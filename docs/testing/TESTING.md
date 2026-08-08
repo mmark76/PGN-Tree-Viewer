@@ -12,4 +12,4 @@ Run the production build and rendered-worker check:
 npm test
 ```
 
-The interaction review covers the empty initial state, PGN upload, tree creation, move selection, board updates, branch controls and navigation.
+The interaction review covers the empty initial state, legal moves played on the board, manual branch creation, PGN upload, move selection, board updates, branch controls and navigation.

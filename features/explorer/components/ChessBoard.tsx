@@ -1,6 +1,7 @@
 "use client";
 
 import { Chessboard } from "react-chessboard";
+import { useState } from "react";
 import type { CSSProperties } from "react";
 import type { MoveCoordinates } from "../types";
 import { messages } from "../i18n";
@@ -12,6 +13,7 @@ type ChessBoardProps = {
   flipped: boolean;
   locale: Locale;
   onFlip: () => void;
+  onMove: (from: string, to: string) => boolean;
 };
 
 const notationStyle: CSSProperties = {
@@ -19,8 +21,10 @@ const notationStyle: CSSProperties = {
   fontWeight: 800,
 };
 
-export function ChessBoard({ fen, lastMove, flipped, locale, onFlip }: ChessBoardProps) {
+export function ChessBoard({ fen, lastMove, flipped, locale, onFlip, onMove }: ChessBoardProps) {
   const text = messages[locale];
+  const [selection, setSelection] = useState<{ fen: string; square: string } | null>(null);
+  const selectedSquare = selection?.fen === fen ? selection.square : null;
   const squareStyles: Record<string, CSSProperties> = {};
 
   if (lastMove) {
@@ -33,6 +37,19 @@ export function ChessBoard({ fen, lastMove, flipped, locale, onFlip }: ChessBoar
     };
   }
 
+  if (selectedSquare) {
+    squareStyles[selectedSquare] = {
+      ...squareStyles[selectedSquare],
+      boxShadow: "inset 0 0 0 4px rgba(23, 63, 50, 0.52)",
+    };
+  }
+
+  const tryMove = (from: string, to: string) => {
+    const moved = onMove(from, to);
+    if (moved) setSelection(null);
+    return moved;
+  };
+
   return (
     <div className="board-wrap">
       <div className="board-frame" aria-label={text.currentBoard}>
@@ -41,12 +58,24 @@ export function ChessBoard({ fen, lastMove, flipped, locale, onFlip }: ChessBoar
             id: "chesstree-position-board",
             position: fen,
             boardOrientation: flipped ? "black" : "white",
-            allowDragging: false,
+            allowDragging: true,
             allowDrawingArrows: false,
             showNotation: true,
             showAnimations: true,
             animationDurationInMs: 220,
             squareStyles,
+            onPieceDrop: ({ sourceSquare, targetSquare }) =>
+              targetSquare ? tryMove(sourceSquare, targetSquare) : false,
+            onSquareClick: ({ piece, square }) => {
+              if (selectedSquare) {
+                if (square === selectedSquare) {
+                  setSelection(null);
+                  return;
+                }
+                if (tryMove(selectedSquare, square)) return;
+              }
+              setSelection(piece ? { fen, square } : null);
+            },
             lightSquareStyle: { backgroundColor: "#f0d9b5" },
             darkSquareStyle: { backgroundColor: "#6f8f72" },
             lightSquareNotationStyle: { ...notationStyle, color: "#6f8f72" },

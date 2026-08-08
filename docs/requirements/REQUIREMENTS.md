@@ -3,7 +3,8 @@
 ## Implemented
 
 - Start with an empty move-tree workspace and the board in its initial position.
-- Create a branching move tree only after a valid PGN import.
+- Create a branching move tree from legal moves played directly on the board.
+- Create or replace the tree from a valid PGN import.
 - Select a move and display the exact board position.
 - Navigate backward and along the most popular continuation.
 - Collapse and expand branches; zoom and scroll large trees.
@@ -11,6 +12,7 @@
 - Merge common move sequences and calculate move popularity.
 - Aggregate white wins, draws and black wins at every node.
 - Support desktop, tablet and narrow mobile layouts.
+- Support Greek and English interface text.
 
 ## Current constraints
 

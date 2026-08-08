@@ -5,10 +5,11 @@ board, local PGN import, and move/result statistics.
 
 ## Features
 
-- empty initial workspace that creates a tree only after PGN import
+- empty initial workspace that creates a tree from board moves or PGN import
 - responsive chessboard with SVG pieces, coordinates, move highlighting, and rotation
 - interactive variation tree with collapse, expand, zoom, and scrolling
 - board position synchronized with the selected move
+- legal board moves create nodes and alternative branches in the tree
 - local import of one or more PGN games
 - automatic popularity and result percentages
 - responsive desktop and mobile layout
