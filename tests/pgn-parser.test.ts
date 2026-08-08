@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { parsePgnCollection } from "../features/explorer/services/pgnParser";
 import { buildTree, resultCount } from "../features/explorer/services/treeBuilder";
+import { firstMovesLabel, gamesLabel, importSuccess } from "../features/explorer/i18n";
 
 const collection = `[Event "Game one"]
 [Result "1-0"]
@@ -21,6 +22,14 @@ test("keeps the initial move tree empty before PGN import", () => {
   assert.equal(tree.id, "start");
   assert.equal(tree.children.length, 0);
   assert.equal(resultCount(tree.results), 0);
+});
+
+test("provides Greek and English count labels", () => {
+  assert.equal(gamesLabel("el", 1), "1 παρτίδα");
+  assert.equal(gamesLabel("en", 2), "2 games");
+  assert.equal(firstMovesLabel("en", 1), "1 first move");
+  assert.equal(importSuccess("el", 1, 0), "1 παρτίδα εισήχθη.");
+  assert.equal(importSuccess("en", 2, 1), "2 games imported · 1 skipped.");
 });
 
 test("parses multiple PGN games and preserves results", () => {

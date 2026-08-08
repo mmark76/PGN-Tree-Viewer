@@ -58,5 +58,5 @@ function openingName(headers: Record<string, string>) {
   if (headers.Opening) return headers.Opening;
   if (headers.ECO) return `ECO ${headers.ECO}`;
   if (headers.Event && headers.Event !== "?") return headers.Event;
-  return "Εισαγόμενο PGN";
+  return "PGN";
 }
