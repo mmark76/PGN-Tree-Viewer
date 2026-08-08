@@ -3,11 +3,14 @@
 import { Chessboard } from "react-chessboard";
 import type { CSSProperties } from "react";
 import type { MoveCoordinates } from "../types";
+import { messages } from "../i18n";
+import type { Locale } from "../i18n";
 
 type ChessBoardProps = {
   fen: string;
   lastMove: MoveCoordinates | null;
   flipped: boolean;
+  locale: Locale;
   onFlip: () => void;
 };
 
@@ -16,7 +19,8 @@ const notationStyle: CSSProperties = {
   fontWeight: 800,
 };
 
-export function ChessBoard({ fen, lastMove, flipped, onFlip }: ChessBoardProps) {
+export function ChessBoard({ fen, lastMove, flipped, locale, onFlip }: ChessBoardProps) {
+  const text = messages[locale];
   const squareStyles: Record<string, CSSProperties> = {};
 
   if (lastMove) {
@@ -31,7 +35,7 @@ export function ChessBoard({ fen, lastMove, flipped, onFlip }: ChessBoardProps) 
 
   return (
     <div className="board-wrap">
-      <div className="board-frame" aria-label="Σκακιέρα τρέχουσας θέσης">
+      <div className="board-frame" aria-label={text.currentBoard}>
         <Chessboard
           options={{
             id: "chesstree-position-board",
@@ -57,7 +61,7 @@ export function ChessBoard({ fen, lastMove, flipped, onFlip }: ChessBoardProps) 
       </div>
       <button className="button board-flip" type="button" onClick={onFlip}>
         <span aria-hidden="true">↻</span>
-        Περιστροφή σκακιέρας
+        {text.flipBoard}
       </button>
     </div>
   );

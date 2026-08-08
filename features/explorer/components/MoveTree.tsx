@@ -2,17 +2,21 @@ import { useMemo } from "react";
 import type { TreeNode } from "../types";
 import { layoutTree } from "../services/treeLayout";
 import { resultCount } from "../services/treeBuilder";
+import { gamesLabel, messages } from "../i18n";
+import type { Locale } from "../i18n";
 
 type MoveTreeProps = {
   root: TreeNode;
   selectedId: string;
   collapsedIds: Set<string>;
   zoom: number;
+  locale: Locale;
   onSelect: (id: string) => void;
   onToggle: (id: string) => void;
 };
 
-export function MoveTree({ root, selectedId, collapsedIds, zoom, onSelect, onToggle }: MoveTreeProps) {
+export function MoveTree({ root, selectedId, collapsedIds, zoom, locale, onSelect, onToggle }: MoveTreeProps) {
+  const text = messages[locale];
   const layout = useMemo(() => layoutTree(root, collapsedIds), [root, collapsedIds]);
   const selectedAncestors = useMemo(() => {
     const ids = new Set<string>();
@@ -56,10 +60,10 @@ export function MoveTree({ root, selectedId, collapsedIds, zoom, onSelect, onTog
                   type="button"
                   className={`move-node${node.id === selectedId ? " selected" : ""}${node.id === "start" ? " root" : ""}`}
                   onClick={() => onSelect(node.id)}
-                  aria-label={`${node.san}, ${total} παρτίδες`}
+                  aria-label={`${node.id === "start" ? text.start : node.san}, ${gamesLabel(locale, total)}`}
                 >
                   {node.id === "start" ? (
-                    <><strong>Αρχή</strong><small>{total} παρτίδες</small></>
+                    <><strong>{text.start}</strong><small>{gamesLabel(locale, total)}</small></>
                   ) : (
                     <>
                       <span className="node-top">
@@ -67,7 +71,7 @@ export function MoveTree({ root, selectedId, collapsedIds, zoom, onSelect, onTog
                         <span className="node-rate">{parentShare}%</span>
                       </span>
                       <span className="node-bottom">
-                        <span>{total} παρτίδες</span>
+                        <span>{gamesLabel(locale, total)}</span>
                         <span className="node-results" aria-hidden="true">
                           <span style={{ width: `${white}%` }} />
                           <span style={{ width: `${draw}%` }} />
@@ -81,7 +85,7 @@ export function MoveTree({ root, selectedId, collapsedIds, zoom, onSelect, onTog
                   <button
                     type="button"
                     className="collapse-control"
-                    aria-label={collapsedIds.has(node.id) ? "Άνοιγμα κλάδου" : "Κλείσιμο κλάδου"}
+                    aria-label={collapsedIds.has(node.id) ? text.openBranch : text.closeBranch}
                     onClick={() => onToggle(node.id)}
                   >
                     {collapsedIds.has(node.id) ? "+" : "−"}

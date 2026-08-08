@@ -1,14 +1,21 @@
+import { messages } from "../i18n";
+import type { Locale } from "../i18n";
+
 type ExplorerHeaderProps = {
   sourceLabel: string;
   importing: boolean;
+  locale: Locale;
+  onLocaleChange: (locale: Locale) => void;
 };
 
-export function ExplorerHeader({ sourceLabel, importing }: ExplorerHeaderProps) {
+export function ExplorerHeader({ sourceLabel, importing, locale, onLocaleChange }: ExplorerHeaderProps) {
+  const text = messages[locale];
+
   return (
     <header className="site-header" id="top">
       <div className="header-main">
         <div className="header-brand">
-          <p className="header-eyebrow">YOUR PRIVATE CHESS STUDY SPACE</p>
+          <p className="header-eyebrow">{text.eyebrow}</p>
           <div className="header-title-row">
             <div className="brand-mark" aria-hidden="true">♘</div>
             <div>
@@ -19,22 +26,25 @@ export function ExplorerHeader({ sourceLabel, importing }: ExplorerHeaderProps) 
         </div>
 
         <div className="header-actions">
-          <span className="local-badge"><span aria-hidden="true" /> Local PGN</span>
-          <span className="language-badge" aria-label="Γλώσσα: Ελληνικά">GR</span>
+          <span className="local-badge"><span aria-hidden="true" /> {text.localPgn}</span>
+          <div className="language-switch" aria-label={text.language}>
+            <button className={locale === "el" ? "active" : ""} type="button" aria-pressed={locale === "el"} onClick={() => onLocaleChange("el")}>GR</button>
+            <button className={locale === "en" ? "active" : ""} type="button" aria-pressed={locale === "en"} onClick={() => onLocaleChange("en")}>EN</button>
+          </div>
           <label className={`button primary upload-label${importing ? " disabled" : ""}`} htmlFor="pgn-file">
             <span aria-hidden="true">↑</span>
-            <span>{importing ? "Ανάγνωση…" : "Εισαγωγή PGN"}</span>
+            <span>{importing ? text.reading : text.importPgn}</span>
           </label>
           <a className="ecosystem-link" href="https://markellosecosystem.com/">
-            Πίσω στο markellosecosystem
+            {text.backToEcosystem}
           </a>
         </div>
       </div>
 
-      <nav className="primary-nav" aria-label="Κύρια πλοήγηση">
-        <a className="active" href="#top">Αρχική</a>
-        <a href="#move-tree">Δέντρο κινήσεων</a>
-        <a href="#position-board">Σκακιέρα</a>
+      <nav className="primary-nav" aria-label={text.mainNavigation}>
+        <a className="active" href="#top">{text.home}</a>
+        <a href="#move-tree">{text.moveTree}</a>
+        <a href="#position-board">{text.board}</a>
       </nav>
     </header>
   );

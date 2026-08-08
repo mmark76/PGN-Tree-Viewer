@@ -121,8 +121,7 @@ button {
   justify-content: flex-end;
 }
 
-.local-badge,
-.language-badge {
+.local-badge {
   min-height: 40px;
   display: inline-flex;
   align-items: center;
@@ -148,11 +147,33 @@ button {
   box-shadow: 0 0 0 3px rgba(34, 182, 91, 0.13);
 }
 
-.language-badge {
-  min-width: 44px;
+.language-switch {
+  min-height: 40px;
+  display: inline-flex;
+  align-items: center;
+  padding: 3px;
   border-color: #edbb6e;
+  border: 1px solid #edbb6e;
+  border-radius: 999px;
+  background: #fff;
+}
+
+.language-switch button {
+  min-width: 40px;
+  min-height: 32px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: #465166;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.language-switch button.active {
   background: #eff9df;
   color: var(--forest);
+  box-shadow: inset 0 0 0 1px #c9df8c;
 }
 
 .ecosystem-link {
