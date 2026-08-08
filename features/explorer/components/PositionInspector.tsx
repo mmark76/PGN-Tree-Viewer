@@ -20,7 +20,7 @@ export function PositionInspector({ node, path, hasData, flipped, onFlip, onBack
   const black = total ? 100 - white - draw : 0;
 
   return (
-    <aside className="inspector">
+    <aside className="inspector" id="position-board">
       <div className="inspector-head">
         <h2>Θέση</h2>
         <div className="nav-controls">

@@ -5,6 +5,7 @@ import type { ChangeEvent } from "react";
 import { buildTree, indexTree, pathToNode, resultCount } from "../services/treeBuilder";
 import { parsePgnCollection } from "../services/pgnParser";
 import type { LineRecord } from "../types";
+import { ExplorerFooter } from "./ExplorerFooter";
 import { ExplorerHeader } from "./ExplorerHeader";
 import { MoveTree } from "./MoveTree";
 import { PositionInspector } from "./PositionInspector";
@@ -62,14 +63,14 @@ export function ExplorerShell() {
   };
 
   return (
-    <main className="app-shell">
+    <div className="app-shell">
       <input ref={fileInput} id="pgn-file" className="file-input" type="file" accept=".pgn,text/plain" onChange={importPgn} />
       <ExplorerHeader
         sourceLabel={fileName || "Εισάγετε PGN για να δημιουργηθεί το δέντρο"}
         importing={importing}
       />
-      <div className="workspace">
-        <section className="tree-section">
+      <main className="workspace">
+        <section className="tree-section" id="move-tree">
           <div className="tree-header">
             <div className="tree-heading">
               <strong>Δέντρο κινήσεων</strong>
@@ -106,7 +107,8 @@ export function ExplorerShell() {
           onForward={() => selected.children[0] && setSelectedId(selected.children[0].id)}
           sourceNote={hasTree ? `${fileName} · ${resultCount(tree.results)} παρτίδες` : "Αναμονή για εισαγωγή PGN"}
         />
-      </div>
-    </main>
+      </main>
+      <ExplorerFooter />
+    </div>
   );
 }
