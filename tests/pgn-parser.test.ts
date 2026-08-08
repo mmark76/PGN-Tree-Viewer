@@ -3,6 +3,8 @@ import test from "node:test";
 import { parsePgnCollection } from "../features/explorer/services/pgnParser";
 import { buildTree, resultCount } from "../features/explorer/services/treeBuilder";
 import { firstMovesLabel, gamesLabel, importSuccess } from "../features/explorer/i18n";
+import { playBoardMove } from "../features/explorer/services/boardMove";
+import { Chess } from "chess.js";
 
 const collection = `[Event "Game one"]
 [Result "1-0"]
@@ -30,6 +32,30 @@ test("provides Greek and English count labels", () => {
   assert.equal(firstMovesLabel("en", 1), "1 first move");
   assert.equal(importSuccess("el", 1, 0), "1 παρτίδα εισήχθη.");
   assert.equal(importSuccess("en", 2, 1), "2 games imported · 1 skipped.");
+});
+
+test("builds a manual branch without game statistics", () => {
+  const tree = buildTree([
+    {
+      moves: ["e4", "c5", "Nf3"],
+      opening: "__manual__",
+      results: { white: 0, draw: 0, black: 0 },
+    },
+  ]);
+
+  assert.equal(tree.children[0].san, "e4");
+  assert.equal(tree.children[0].children[0].san, "c5");
+  assert.equal(tree.children[0].children[0].children[0].san, "Nf3");
+  assert.equal(resultCount(tree.results), 0);
+});
+
+test("accepts legal board moves and rejects illegal ones", () => {
+  const startFen = new Chess().fen();
+  const legal = playBoardMove(startFen, "e2", "e4");
+
+  assert.equal(legal?.san, "e4");
+  assert.match(legal?.fen ?? "", / b /);
+  assert.equal(playBoardMove(startFen, "e2", "e5"), null);
 });
 
 test("parses multiple PGN games and preserves results", () => {

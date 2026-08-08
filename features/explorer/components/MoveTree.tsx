@@ -53,17 +53,20 @@ export function MoveTree({ root, selectedId, collapsedIds, zoom, locale, onSelec
             const parentShare = node.parentCount ? Math.round((total / node.parentCount) * 100) : 100;
             const white = total ? (node.results.white / total) * 100 : 0;
             const draw = total ? (node.results.draw / total) * 100 : 0;
-            const black = Math.max(0, 100 - white - draw);
+            const black = total ? Math.max(0, 100 - white - draw) : 0;
+            const countLabel = total
+              ? gamesLabel(locale, total)
+              : node.id === "start" ? text.manualTree : text.manualMove;
             return (
               <div key={node.id} className="tree-node-wrap" style={{ left: node.x, top: node.y }}>
                 <button
                   type="button"
                   className={`move-node${node.id === selectedId ? " selected" : ""}${node.id === "start" ? " root" : ""}`}
                   onClick={() => onSelect(node.id)}
-                  aria-label={`${node.id === "start" ? text.start : node.san}, ${gamesLabel(locale, total)}`}
+                  aria-label={`${node.id === "start" ? text.start : node.san}, ${countLabel}`}
                 >
                   {node.id === "start" ? (
-                    <><strong>{text.start}</strong><small>{gamesLabel(locale, total)}</small></>
+                    <><strong>{text.start}</strong><small>{countLabel}</small></>
                   ) : (
                     <>
                       <span className="node-top">
@@ -71,7 +74,7 @@ export function MoveTree({ root, selectedId, collapsedIds, zoom, locale, onSelec
                         <span className="node-rate">{parentShare}%</span>
                       </span>
                       <span className="node-bottom">
-                        <span>{gamesLabel(locale, total)}</span>
+                        <span>{countLabel}</span>
                         <span className="node-results" aria-hidden="true">
                           <span style={{ width: `${white}%` }} />
                           <span style={{ width: `${draw}%` }} />

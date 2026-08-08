@@ -13,15 +13,17 @@ type PositionInspectorProps = {
   onFlip: () => void;
   onBack: () => void;
   onForward: () => void;
+  onMove: (from: string, to: string) => boolean;
   sourceNote: string;
 };
 
-export function PositionInspector({ node, path, hasData, locale, flipped, onFlip, onBack, onForward, sourceNote }: PositionInspectorProps) {
+export function PositionInspector({ node, path, hasData, locale, flipped, onFlip, onBack, onForward, onMove, sourceNote }: PositionInspectorProps) {
   const text = messages[locale];
   const total = resultCount(node.results);
   const white = total ? Math.round((node.results.white / total) * 100) : 0;
   const draw = total ? Math.round((node.results.draw / total) * 100) : 0;
   const black = total ? 100 - white - draw : 0;
+  const opening = dominantOpening(node);
 
   return (
     <aside className="inspector" id="position-board">
@@ -32,27 +34,34 @@ export function PositionInspector({ node, path, hasData, locale, flipped, onFlip
           <button className="icon-button" type="button" onClick={onForward} disabled={!hasData || !node.children.length} aria-label={text.nextMove}>→</button>
         </div>
       </div>
-      <ChessBoard fen={node.fen} lastMove={node.move} flipped={flipped} locale={locale} onFlip={onFlip} />
+      <ChessBoard fen={node.fen} lastMove={node.move} flipped={flipped} locale={locale} onFlip={onFlip} onMove={onMove} />
       {hasData ? (
         <>
-          <div className="stats-card">
-            <div className="stats-title">
-              <strong>{node.id === "start" ? text.initialPosition : node.san}</strong>
-              <span>{gamesLabel(locale, total)}</span>
+          {total ? (
+            <div className="stats-card">
+              <div className="stats-title">
+                <strong>{node.id === "start" ? text.initialPosition : node.san}</strong>
+                <span>{gamesLabel(locale, total)}</span>
+              </div>
+              <div className="result-bar" aria-label={`${text.white} ${white}%, ${text.draw} ${draw}%, ${text.black} ${black}%`}>
+                <span style={{ width: `${white}%` }} />
+                <span style={{ width: `${draw}%` }} />
+                <span style={{ width: `${black}%` }} />
+              </div>
+              <div className="result-legend">
+                <div>{text.white}<strong>{white}%</strong></div>
+                <div>{text.draw}<strong>{draw}%</strong></div>
+                <div>{text.black}<strong>{black}%</strong></div>
+              </div>
             </div>
-            <div className="result-bar" aria-label={`${text.white} ${white}%, ${text.draw} ${draw}%, ${text.black} ${black}%`}>
-              <span style={{ width: `${white}%` }} />
-              <span style={{ width: `${draw}%` }} />
-              <span style={{ width: `${black}%` }} />
+          ) : (
+            <div className="position-empty manual-position">
+              <strong>{text.manualLine}</strong>
+              <span>{text.noStatistics}</span>
             </div>
-            <div className="result-legend">
-              <div>{text.white}<strong>{white}%</strong></div>
-              <div>{text.draw}<strong>{draw}%</strong></div>
-              <div>{text.black}<strong>{black}%</strong></div>
-            </div>
-          </div>
+          )}
           <div className="path-card">
-            <p>{dominantOpening(node)}</p>
+            <p>{opening === "__manual__" ? text.manualLine : opening}</p>
             <div className="move-path">{formatPath(path) || text.chooseMove}</div>
           </div>
           <div className="source-note"><span className="status-dot" /> {sourceNote}</div>

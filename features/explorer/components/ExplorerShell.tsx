@@ -6,6 +6,7 @@ import { firstMovesLabel, gamesLabel, importSuccess, messages } from "../i18n";
 import type { Locale } from "../i18n";
 import { buildTree, indexTree, pathToNode, resultCount } from "../services/treeBuilder";
 import { parsePgnCollection } from "../services/pgnParser";
+import { playBoardMove } from "../services/boardMove";
 import type { LineRecord } from "../types";
 import { ExplorerFooter } from "./ExplorerFooter";
 import { ExplorerHeader } from "./ExplorerHeader";
@@ -26,7 +27,7 @@ export function ExplorerShell() {
   const [zoom, setZoom] = useState(0.82);
   const [flipped, setFlipped] = useState(false);
   const selected = index.get(selectedId) ?? tree;
-  const hasTree = lines.length > 0;
+  const hasTree = tree.children.length > 0;
   const text = messages[locale];
 
   const openPgnPicker = () => fileInput.current?.click();
@@ -72,11 +73,48 @@ export function ExplorerShell() {
     });
   };
 
+  const addMoveFromBoard = (from: string, to: string) => {
+    const played = playBoardMove(selected.fen, from, to);
+    if (!played) return false;
+
+    const existing = selected.children.find((child) => child.san === played.san);
+    if (existing) {
+      setSelectedId(existing.id);
+      setCollapsedIds((current) => {
+        if (!current.has(selected.id)) return current;
+        const next = new Set(current);
+        next.delete(selected.id);
+        return next;
+      });
+      return true;
+    }
+
+    const moves = [...pathToNode(selected, index), played.san];
+    const moveKey = `${played.from}${played.to}${played.promotion ?? ""}`;
+    setLines((current) => [
+      ...current,
+      {
+        moves,
+        opening: "__manual__",
+        results: { white: 0, draw: 0, black: 0 },
+      },
+    ]);
+    setSelectedId(`${selected.id}-${moveKey}`);
+    setCollapsedIds((current) => {
+      if (!current.has(selected.id)) return current;
+      const next = new Set(current);
+      next.delete(selected.id);
+      return next;
+    });
+    setNotice(text.moveAdded);
+    return true;
+  };
+
   return (
     <div className="app-shell">
       <input ref={fileInput} id="pgn-file" className="file-input" type="file" accept=".pgn,text/plain" onChange={importPgn} />
       <ExplorerHeader
-        sourceLabel={fileName || text.noPgnSource}
+        sourceLabel={fileName || (hasTree ? text.manualTree : text.noPgnSource)}
         importing={importing}
         locale={locale}
         onLocaleChange={changeLocale}
@@ -86,11 +124,11 @@ export function ExplorerShell() {
           <div className="tree-header">
             <div className="tree-heading">
               <strong>{text.moveTree}</strong>
-              <span>{hasTree ? fileName : text.noFile}</span>
+              <span>{hasTree ? (fileName || text.manualTree) : text.noFile}</span>
             </div>
             {hasTree ? (
               <div className="tree-tools">
-                <span className="tree-summary">{gamesLabel(locale, resultCount(tree.results))} · {firstMovesLabel(locale, tree.children.length)}</span>
+                <span className="tree-summary">{resultCount(tree.results) ? gamesLabel(locale, resultCount(tree.results)) : text.manualTree} · {firstMovesLabel(locale, tree.children.length)}</span>
                 <button className="icon-button" type="button" onClick={() => setZoom((value) => Math.max(0.55, value - 0.1))} aria-label={text.zoomOut}>−</button>
                 <span className="zoom-value">{Math.round(zoom * 100)}%</span>
                 <button className="icon-button" type="button" onClick={() => setZoom((value) => Math.min(1.2, value + 0.1))} aria-label={text.zoomIn}>+</button>
@@ -118,7 +156,8 @@ export function ExplorerShell() {
           onFlip={() => setFlipped((value) => !value)}
           onBack={() => selected.parentId && setSelectedId(selected.parentId)}
           onForward={() => selected.children[0] && setSelectedId(selected.children[0].id)}
-          sourceNote={hasTree ? `${fileName} · ${gamesLabel(locale, resultCount(tree.results))}` : text.waitingForPgn}
+          onMove={addMoveFromBoard}
+          sourceNote={hasTree ? (fileName ? `${fileName} · ${gamesLabel(locale, resultCount(tree.results))}` : text.manualTree) : text.waitingForPgn}
         />
       </main>
       <ExplorerFooter locale={locale} />
