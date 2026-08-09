@@ -1,4 +1,4 @@
-# PGN Tree Viewer Architecture
+# Chess Tree Builder Architecture
 
 ## Scope
 
@@ -7,7 +7,7 @@ The application is a client-side chess repertoire explorer. It starts with an em
 ## Data flow
 
 ```text
-Manual lines / local PGN or ChessTree JSON file
+Manual lines / local PGN or Chess Tree Builder JSON file
           ↓
 LineRecord[]
           ↓
@@ -25,7 +25,7 @@ PGN / JSON / SVG download
 - `services/pgnParser.ts`: converts PGN text into normalized line records.
 - `services/treeBuilder.ts`: validates moves, merges common paths and aggregates results.
 - `services/treeLayout.ts`: assigns visual coordinates without depending on React.
-- `services/treeFiles.ts`: validates ChessTree JSON and serializes PGN, JSON and SVG downloads.
+- `services/treeFiles.ts`: validates Chess Tree Builder JSON and serializes PGN, JSON and SVG downloads.
 - `components/MoveTree.tsx`: renders and controls the variation tree.
 - `components/ChessBoard.tsx`: renders a FEN position and reports drag or click moves.
 - `components/PositionInspector.tsx`: presents the selected position and statistics.

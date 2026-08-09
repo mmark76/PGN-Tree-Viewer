@@ -8,8 +8,8 @@
 - Select a move and display the exact board position.
 - Navigate backward and along the most popular continuation.
 - Collapse and expand branches; zoom and scroll large trees.
-- Import local `.pgn` files containing one or more games and `.json` ChessTree files.
-- Download the complete tree as PGN variations, lossless ChessTree JSON or an SVG image.
+- Import local `.pgn` files containing one or more games and `.json` Chess Tree Builder files.
+- Download the complete tree as PGN variations, lossless Chess Tree Builder JSON or an SVG image.
 - Merge common move sequences and calculate move popularity.
 - Aggregate white wins, draws and black wins at every node.
 - Support desktop, tablet and narrow mobile layouts.

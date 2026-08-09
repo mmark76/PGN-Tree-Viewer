@@ -1,5 +1,5 @@
 {
-  "name": "chesstree",
+  "name": "chess-tree-builder",
   "version": "0.1.0",
   "private": true,
   "engines": {
@@ -37,5 +37,5 @@
     "vite": "8.0.13"
   },
   "type": "module",
-  "displayName": "ChessTree"
+  "displayName": "Chess Tree Builder"
 }

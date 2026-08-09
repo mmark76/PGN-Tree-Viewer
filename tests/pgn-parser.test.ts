@@ -119,14 +119,14 @@ test("exports branches as PGN variations with statistics", () => {
   const tree = buildTree(parsePgnCollection(collection).lines);
   const pgn = serializeTreeToPgn(tree);
 
-  assert.match(pgn, /\[Event "ChessTree Export"\]/);
+  assert.match(pgn, /\[Event "Chess Tree Builder Export"\]/);
   assert.match(pgn, /1\. c4 \{Games: 2; White: 1; Draw: 0; Black: 1\}/);
   assert.match(pgn, /\(1\.\.\. e5/);
   assert.match(pgn, /\*\n$/);
   assert.doesNotThrow(() => new Chess().loadPgn(pgn));
 });
 
-test("round-trips a complete ChessTree JSON file", () => {
+test("round-trips a complete Chess Tree Builder JSON file", () => {
   const lines = parsePgnCollection(collection).lines;
   const json = serializeChessTreeJson(lines, DEFAULT_SETTINGS, "study.pgn");
   const restored = parseChessTreeJson(json);
@@ -151,5 +151,6 @@ test("exports the complete tree as a scalable SVG image", () => {
 test("creates safe download file names", () => {
   assert.equal(downloadBaseName("Sicilian study.pgn"), "Sicilian-study-tree");
   assert.equal(downloadBaseName("Sicilian-study-tree.chesstree.json"), "Sicilian-study-tree");
-  assert.equal(downloadBaseName(""), "chesstree");
+  assert.equal(downloadBaseName("Sicilian-study-tree.chess-tree-builder.json"), "Sicilian-study-tree");
+  assert.equal(downloadBaseName(""), "chess-tree-builder");
 });

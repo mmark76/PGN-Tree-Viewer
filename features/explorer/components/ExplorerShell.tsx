@@ -119,7 +119,7 @@ export function ExplorerShell() {
     }
     downloadTextFile(
       serializeChessTreeJson(lines, settings, fileName),
-      `${baseName}.chesstree.json`,
+      `${baseName}.chess-tree-builder.json`,
       "application/json;charset=utf-8",
     );
   };

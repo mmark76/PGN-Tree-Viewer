@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "PGN Tree Viewer",
+  title: "Chess Tree Builder",
   description:
     "Interactive chess opening map with a live board, move statistics, and local PGN import.",
   other: {
