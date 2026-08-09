@@ -114,7 +114,7 @@ export function ExplorerShell() {
     <div className="app-shell">
       <input ref={fileInput} id="pgn-file" className="file-input" type="file" accept=".pgn,text/plain" onChange={importPgn} />
       <ExplorerHeader
-        sourceLabel={fileName || (hasTree ? text.manualTree : text.noPgnSource)}
+        sourceLabel={fileName || text.noPgnSource}
         importing={importing}
         locale={locale}
         onLocaleChange={changeLocale}
@@ -124,11 +124,14 @@ export function ExplorerShell() {
           <div className="tree-header">
             <div className="tree-heading">
               <strong>{text.moveTree}</strong>
-              <span>{hasTree ? (fileName || text.manualTree) : text.noFile}</span>
+              {(fileName || !hasTree) && <span>{fileName || text.noFile}</span>}
             </div>
             {hasTree ? (
               <div className="tree-tools">
-                <span className="tree-summary">{resultCount(tree.results) ? gamesLabel(locale, resultCount(tree.results)) : text.manualTree} · {firstMovesLabel(locale, tree.children.length)}</span>
+                <span className="tree-summary">
+                  {resultCount(tree.results) ? `${gamesLabel(locale, resultCount(tree.results))} · ` : ""}
+                  {firstMovesLabel(locale, tree.children.length)}
+                </span>
                 <button className="icon-button" type="button" onClick={() => setZoom((value) => Math.max(0.55, value - 0.1))} aria-label={text.zoomOut}>−</button>
                 <span className="zoom-value">{Math.round(zoom * 100)}%</span>
                 <button className="icon-button" type="button" onClick={() => setZoom((value) => Math.min(1.2, value + 0.1))} aria-label={text.zoomIn}>+</button>
@@ -157,7 +160,7 @@ export function ExplorerShell() {
           onBack={() => selected.parentId && setSelectedId(selected.parentId)}
           onForward={() => selected.children[0] && setSelectedId(selected.children[0].id)}
           onMove={addMoveFromBoard}
-          sourceNote={hasTree ? (fileName ? `${fileName} · ${gamesLabel(locale, resultCount(tree.results))}` : text.manualTree) : text.waitingForPgn}
+          sourceNote={hasTree ? (fileName ? `${fileName} · ${gamesLabel(locale, resultCount(tree.results))}` : "") : text.waitingForPgn}
         />
       </main>
       <ExplorerFooter locale={locale} />
