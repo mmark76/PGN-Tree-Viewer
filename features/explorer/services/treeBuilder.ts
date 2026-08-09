@@ -12,6 +12,12 @@ const addResults = (target: ResultTotals, source: ResultTotals) => {
 export const resultCount = (results: ResultTotals) =>
   results.white + results.draw + results.black;
 
+export function popularityPercentage(results: ResultTotals, parentCount: number) {
+  const total = resultCount(results);
+  if (!total || !parentCount) return null;
+  return Math.round((total / parentCount) * 100);
+}
+
 export function dominantOpening(node: TreeNode) {
   return Object.entries(node.openingTotals).sort((a, b) => b[1] - a[1])[0]?.[0] ?? "Αρχική θέση";
 }

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { parsePgnCollection } from "../features/explorer/services/pgnParser";
-import { buildTree, resultCount } from "../features/explorer/services/treeBuilder";
+import { buildTree, popularityPercentage, resultCount } from "../features/explorer/services/treeBuilder";
 import { firstMovesLabel, gamesLabel, importSuccess } from "../features/explorer/i18n";
 import { playBoardMove } from "../features/explorer/services/boardMove";
 import { Chess } from "chess.js";
@@ -48,6 +48,13 @@ test("builds a manual branch without game statistics", () => {
   assert.equal(tree.children[0].children[0].san, "c5");
   assert.equal(tree.children[0].children[0].children[0].san, "Nf3");
   assert.equal(resultCount(tree.results), 0);
+  assert.equal(popularityPercentage(tree.children[0].results, resultCount(tree.results)), null);
+});
+
+test("shows popularity only when PGN statistics exist", () => {
+  assert.equal(popularityPercentage({ white: 3, draw: 1, black: 1 }, 10), 50);
+  assert.equal(popularityPercentage({ white: 0, draw: 0, black: 0 }, 10), null);
+  assert.equal(popularityPercentage({ white: 1, draw: 0, black: 0 }, 0), null);
 });
 
 test("accepts legal board moves and rejects illegal ones", () => {
