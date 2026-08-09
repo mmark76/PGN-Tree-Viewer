@@ -5,11 +5,13 @@ type ExplorerHeaderProps = {
   sourceLabel: string;
   importing: boolean;
   locale: Locale;
+  downloadDisabled: boolean;
   onLocaleChange: (locale: Locale) => void;
+  onOpenDownload: () => void;
   onOpenSettings: () => void;
 };
 
-export function ExplorerHeader({ sourceLabel, importing, locale, onLocaleChange, onOpenSettings }: ExplorerHeaderProps) {
+export function ExplorerHeader({ sourceLabel, importing, locale, downloadDisabled, onLocaleChange, onOpenDownload, onOpenSettings }: ExplorerHeaderProps) {
   const text = messages[locale];
 
   return (
@@ -32,11 +34,15 @@ export function ExplorerHeader({ sourceLabel, importing, locale, onLocaleChange,
             <span aria-hidden="true">⚙</span>
             {text.settings}
           </button>
+          <button className="button download-button" type="button" disabled={downloadDisabled} onClick={onOpenDownload}>
+            <span aria-hidden="true">↓</span>
+            {text.downloadTree}
+          </button>
           <div className="language-switch" aria-label={text.language}>
             <button className={locale === "el" ? "active" : ""} type="button" aria-pressed={locale === "el"} onClick={() => onLocaleChange("el")}>GR</button>
             <button className={locale === "en" ? "active" : ""} type="button" aria-pressed={locale === "en"} onClick={() => onLocaleChange("en")}>EN</button>
           </div>
-          <label className={`button primary upload-label${importing ? " disabled" : ""}`} htmlFor="pgn-file">
+          <label className={`button primary upload-label${importing ? " disabled" : ""}`} htmlFor="tree-file">
             <span aria-hidden="true">↑</span>
             <span>{importing ? text.reading : text.importPgn}</span>
           </label>

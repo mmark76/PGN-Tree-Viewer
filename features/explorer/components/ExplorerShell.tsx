@@ -7,6 +7,14 @@ import type { Locale } from "../i18n";
 import { buildTree, indexTree, pathToNode, resultCount } from "../services/treeBuilder";
 import { parsePgnCollection } from "../services/pgnParser";
 import { playBoardMove } from "../services/boardMove";
+import {
+  downloadBaseName,
+  downloadTextFile,
+  parseChessTreeJson,
+  serializeChessTreeJson,
+  serializeTreeToPgn,
+  serializeTreeToSvg,
+} from "../services/treeFiles";
 import { DEFAULT_SETTINGS, readStoredSettings, storeSettings } from "../settings";
 import type { ExplorerSettings } from "../settings";
 import type { LineRecord } from "../types";
@@ -15,6 +23,8 @@ import { ExplorerHeader } from "./ExplorerHeader";
 import { MoveTree } from "./MoveTree";
 import { PositionInspector } from "./PositionInspector";
 import { SettingsPanel } from "./SettingsPanel";
+import { DownloadPanel } from "./DownloadPanel";
+import type { DownloadFormat } from "./DownloadPanel";
 
 export function ExplorerShell() {
   const [lines, setLines] = useState<LineRecord[]>([]);
@@ -31,6 +41,7 @@ export function ExplorerShell() {
   const [flipped, setFlipped] = useState(false);
   const [settings, setSettings] = useState<ExplorerSettings>({ ...DEFAULT_SETTINGS });
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [downloadOpen, setDownloadOpen] = useState(false);
   const selected = index.get(selectedId) ?? tree;
   const hasTree = tree.children.length > 0;
   const text = messages[locale];
@@ -44,7 +55,7 @@ export function ExplorerShell() {
     return () => window.cancelAnimationFrame(frame);
   }, []);
 
-  const openPgnPicker = () => fileInput.current?.click();
+  const openFilePicker = () => fileInput.current?.click();
 
   const changeLocale = (nextLocale: Locale) => {
     setLocale(nextLocale);
@@ -57,7 +68,7 @@ export function ExplorerShell() {
     storeSettings(nextSettings);
   };
 
-  const importPgn = async (event: ChangeEvent<HTMLInputElement>) => {
+  const importFile = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
     if (file.size > 8 * 1024 * 1024) {
@@ -67,20 +78,50 @@ export function ExplorerShell() {
     }
     setImporting(true);
     setNotice("");
+    const isJson = file.name.toLowerCase().endsWith(".json") || file.type === "application/json";
     try {
-      const parsed = parsePgnCollection(await file.text());
-      if (!parsed.lines.length) throw new Error(text.noValidMoves);
-      setLines(parsed.lines);
+      const content = await file.text();
+      if (isJson) {
+        const parsed = parseChessTreeJson(content);
+        setLines(parsed.lines);
+        changeSettings(parsed.settings);
+        setNotice(text.treeImported);
+      } else {
+        const parsed = parsePgnCollection(content);
+        if (!parsed.lines.length) throw new Error(text.noValidMoves);
+        setLines(parsed.lines);
+        setNotice(importSuccess(locale, parsed.gameCount, parsed.skippedCount));
+      }
       setFileName(file.name);
       setSelectedId("start");
       setCollapsedIds(new Set());
-      setNotice(importSuccess(locale, parsed.gameCount, parsed.skippedCount));
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : text.readFailed);
+      setNotice(isJson ? text.invalidTreeFile : error instanceof Error ? error.message : text.readFailed);
     } finally {
       setImporting(false);
       event.target.value = "";
     }
+  };
+
+  const downloadTree = (format: DownloadFormat) => {
+    const baseName = downloadBaseName(fileName);
+    if (format === "pgn") {
+      downloadTextFile(serializeTreeToPgn(tree), `${baseName}.pgn`, "application/x-chess-pgn;charset=utf-8");
+      return;
+    }
+    if (format === "svg") {
+      downloadTextFile(
+        serializeTreeToSvg(tree, locale, settings.accentColor),
+        `${baseName}.svg`,
+        "image/svg+xml;charset=utf-8",
+      );
+      return;
+    }
+    downloadTextFile(
+      serializeChessTreeJson(lines, settings, fileName),
+      `${baseName}.chesstree.json`,
+      "application/json;charset=utf-8",
+    );
   };
 
   const toggleBranch = (id: string) => {
@@ -137,12 +178,21 @@ export function ExplorerShell() {
       data-font={settings.font}
       style={appStyle}
     >
-      <input ref={fileInput} id="pgn-file" className="file-input" type="file" accept=".pgn,text/plain" onChange={importPgn} />
+      <input
+        ref={fileInput}
+        id="tree-file"
+        className="file-input"
+        type="file"
+        accept=".pgn,.json,text/plain,application/json"
+        onChange={importFile}
+      />
       <ExplorerHeader
         sourceLabel={fileName || text.noPgnSource}
         importing={importing}
         locale={locale}
+        downloadDisabled={!hasTree}
         onLocaleChange={changeLocale}
+        onOpenDownload={() => setDownloadOpen(true)}
         onOpenSettings={() => setSettingsOpen(true)}
       />
       <main className="workspace">
@@ -164,12 +214,12 @@ export function ExplorerShell() {
                 <button className="icon-button" type="button" onClick={() => setCollapsedIds(new Set())} aria-label={text.expandAll}>↗</button>
               </div>
             ) : (
-              <button className="button" type="button" onClick={openPgnPicker} disabled={importing}>
+              <button className="button" type="button" onClick={openFilePicker} disabled={importing}>
                 {text.importPgn}
               </button>
             )}
           </div>
-          {notice && <div className={`notice${notice === text.noValidMoves || notice === text.fileTooLarge || notice === text.readFailed ? " error" : ""}`} role="status">{notice}</div>}
+          {notice && <div className={`notice${notice === text.noValidMoves || notice === text.invalidTreeFile || notice === text.fileTooLarge || notice === text.readFailed ? " error" : ""}`} role="status">{notice}</div>}
           {hasTree ? (
             <MoveTree root={tree} selectedId={selectedId} collapsedIds={collapsedIds} zoom={zoom} locale={locale} onSelect={setSelectedId} onToggle={toggleBranch} />
           ) : (
@@ -198,6 +248,13 @@ export function ExplorerShell() {
           settings={settings}
           onChange={changeSettings}
           onClose={() => setSettingsOpen(false)}
+        />
+      )}
+      {downloadOpen && hasTree && (
+        <DownloadPanel
+          locale={locale}
+          onDownload={downloadTree}
+          onClose={() => setDownloadOpen(false)}
         />
       )}
     </div>

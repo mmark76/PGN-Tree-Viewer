@@ -1,8 +1,8 @@
 # ChessTree
 
 ChessTree is an interactive chess-opening explorer with a move tree, a live
-board, local PGN import, move/result statistics, and locally saved appearance
-settings for colors, sizes, and fonts.
+board, local PGN and ChessTree JSON import, move/result statistics, downloadable
+PGN/JSON/SVG exports, and locally saved appearance settings.
 
 ## Features
 
@@ -11,11 +11,12 @@ settings for colors, sizes, and fonts.
 - interactive variation tree with collapse, expand, zoom, and scrolling
 - board position synchronized with the selected move
 - legal board moves create nodes and alternative branches in the tree
-- local import of one or more PGN games
+- local import of one or more PGN games or a complete ChessTree JSON file
+- download of the complete tree as PGN variations, lossless JSON, or an SVG image
 - automatic popularity and result percentages
 - responsive desktop and mobile layout
 
-PGN files are parsed locally in the browser and are not uploaded.
+PGN and JSON files are processed locally in the browser and are not uploaded.
 
 ## Development
 

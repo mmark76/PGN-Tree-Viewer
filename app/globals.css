@@ -220,6 +220,21 @@ button {
   line-height: 1;
 }
 
+.download-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border-color: var(--forest);
+  background: #f6faed;
+  color: var(--forest);
+}
+
+.download-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+  transform: none;
+}
+
 .ecosystem-link {
   color: var(--forest-2);
   font-size: calc(12px + var(--font-step));
@@ -893,6 +908,80 @@ button {
   background: #f8f7f2;
 }
 
+.download-dialog {
+  width: min(100%, 560px);
+}
+
+.download-options {
+  display: grid;
+  gap: 10px;
+  padding: 18px 22px 22px;
+}
+
+.download-option {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 58px minmax(0, 1fr) 28px;
+  align-items: center;
+  gap: 12px;
+  padding: 13px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: #fff;
+  cursor: pointer;
+  text-align: left;
+  transition: 160ms ease;
+}
+
+.download-option:hover,
+.download-option:focus-visible {
+  border-color: var(--forest-2);
+  background: #f8fbef;
+  transform: translateY(-1px);
+}
+
+.download-option:focus-visible {
+  outline: 3px solid rgba(23, 63, 50, 0.18);
+  outline-offset: 2px;
+}
+
+.download-badge {
+  min-height: 42px;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  background: var(--forest);
+  color: #fff;
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+}
+
+.download-copy {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.download-copy strong {
+  color: var(--ink);
+  font-size: calc(13px + var(--font-step));
+}
+
+.download-copy small {
+  color: var(--muted);
+  font-size: calc(10px + var(--font-step));
+  line-height: 1.4;
+}
+
+.download-arrow {
+  color: var(--forest-2);
+  font-size: 20px;
+  font-weight: 900;
+  text-align: center;
+}
+
 .site-footer {
   margin-top: 4px;
   border-top: 1px solid #cbd3dc;
@@ -980,4 +1069,6 @@ button {
   .settings-body { padding: 14px 16px; }
   .settings-footer { padding: 13px 16px 15px; }
   .color-settings { grid-template-columns: 1fr; }
+  .download-options { padding: 14px 16px 18px; }
+  .download-option { grid-template-columns: 50px minmax(0, 1fr) 22px; gap: 10px; padding: 11px; }
 }
