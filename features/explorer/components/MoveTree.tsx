@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import type { TreeNode } from "../types";
 import { layoutTree } from "../services/treeLayout";
-import { resultCount } from "../services/treeBuilder";
+import { popularityPercentage, resultCount } from "../services/treeBuilder";
 import { gamesLabel, messages } from "../i18n";
 import type { Locale } from "../i18n";
 
@@ -50,7 +50,7 @@ export function MoveTree({ root, selectedId, collapsedIds, zoom, locale, onSelec
           </svg>
           {layout.nodes.map((node) => {
             const total = resultCount(node.results);
-            const parentShare = node.parentCount ? Math.round((total / node.parentCount) * 100) : 100;
+            const parentShare = popularityPercentage(node.results, node.parentCount);
             const white = total ? (node.results.white / total) * 100 : 0;
             const draw = total ? (node.results.draw / total) * 100 : 0;
             const black = total ? Math.max(0, 100 - white - draw) : 0;
@@ -69,7 +69,7 @@ export function MoveTree({ root, selectedId, collapsedIds, zoom, locale, onSelec
                     <>
                       <span className="node-top">
                         <span className="node-san">{node.san}</span>
-                        <span className="node-rate">{parentShare}%</span>
+                        {parentShare !== null && <span className="node-rate">{parentShare}%</span>}
                       </span>
                       {countLabel && (
                         <span className="node-bottom">
