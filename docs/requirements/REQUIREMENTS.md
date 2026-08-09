@@ -12,7 +12,7 @@
 - Merge common move sequences and calculate move popularity.
 - Aggregate white wins, draws and black wins at every node.
 - Support desktop, tablet and narrow mobile layouts.
-- Support Greek and English interface text.
+- Support Greek and English interface text, with English as the default language.
 
 ## Current constraints
 

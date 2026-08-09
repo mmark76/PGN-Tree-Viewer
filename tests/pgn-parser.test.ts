@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { parsePgnCollection } from "../features/explorer/services/pgnParser";
 import { buildTree, popularityPercentage, resultCount } from "../features/explorer/services/treeBuilder";
-import { firstMovesLabel, gamesLabel, importSuccess } from "../features/explorer/i18n";
+import { DEFAULT_LOCALE, firstMovesLabel, gamesLabel, importSuccess, messages } from "../features/explorer/i18n";
 import { playBoardMove } from "../features/explorer/services/boardMove";
 import { Chess } from "chess.js";
 import { DEFAULT_SETTINGS, normalizeSettings } from "../features/explorer/settings";
@@ -33,6 +33,11 @@ test("provides Greek and English count labels", () => {
   assert.equal(firstMovesLabel("en", 1), "1 first move");
   assert.equal(importSuccess("el", 1, 0), "1 παρτίδα εισήχθη.");
   assert.equal(importSuccess("en", 2, 1), "2 games imported · 1 skipped.");
+});
+
+test("uses English as the default interface language", () => {
+  assert.equal(DEFAULT_LOCALE, "en");
+  assert.equal(messages[DEFAULT_LOCALE].settings, "Settings");
 });
 
 test("builds a manual branch without game statistics", () => {

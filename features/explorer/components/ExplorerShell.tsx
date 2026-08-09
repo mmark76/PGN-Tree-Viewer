@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ChangeEvent, CSSProperties } from "react";
-import { firstMovesLabel, gamesLabel, importSuccess, messages } from "../i18n";
+import { DEFAULT_LOCALE, firstMovesLabel, gamesLabel, importSuccess, messages } from "../i18n";
 import type { Locale } from "../i18n";
 import { buildTree, indexTree, pathToNode, resultCount } from "../services/treeBuilder";
 import { parsePgnCollection } from "../services/pgnParser";
@@ -21,7 +21,7 @@ export function ExplorerShell() {
   const [fileName, setFileName] = useState("");
   const [importing, setImporting] = useState(false);
   const [notice, setNotice] = useState("");
-  const [locale, setLocale] = useState<Locale>("el");
+  const [locale, setLocale] = useState<Locale>(DEFAULT_LOCALE);
   const fileInput = useRef<HTMLInputElement>(null);
   const tree = useMemo(() => buildTree(lines), [lines]);
   const index = useMemo(() => indexTree(tree), [tree]);

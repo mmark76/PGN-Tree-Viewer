@@ -1,5 +1,7 @@
 export type Locale = "el" | "en";
 
+export const DEFAULT_LOCALE: Locale = "en";
+
 export const messages = {
   el: {
     eyebrow: "Ο ΠΡΟΣΩΠΙΚΟΣ ΣΟΥ ΧΩΡΟΣ ΣΚΑΚΙΣΤΙΚΗΣ ΜΕΛΕΤΗΣ",
