@@ -1,7 +1,8 @@
 # ChessTree
 
 ChessTree is an interactive chess-opening explorer with a move tree, a live
-board, local PGN import, and move/result statistics.
+board, local PGN import, move/result statistics, and locally saved appearance
+settings for colors, sizes, and fonts.
 
 ## Features
 
