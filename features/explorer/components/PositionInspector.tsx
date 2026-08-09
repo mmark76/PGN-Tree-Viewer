@@ -14,10 +14,12 @@ type PositionInspectorProps = {
   onBack: () => void;
   onForward: () => void;
   onMove: (from: string, to: string) => boolean;
+  lightSquareColor: string;
+  darkSquareColor: string;
   sourceNote?: string;
 };
 
-export function PositionInspector({ node, path, hasData, locale, flipped, onFlip, onBack, onForward, onMove, sourceNote }: PositionInspectorProps) {
+export function PositionInspector({ node, path, hasData, locale, flipped, onFlip, onBack, onForward, onMove, lightSquareColor, darkSquareColor, sourceNote }: PositionInspectorProps) {
   const text = messages[locale];
   const total = resultCount(node.results);
   const white = total ? Math.round((node.results.white / total) * 100) : 0;
@@ -34,7 +36,16 @@ export function PositionInspector({ node, path, hasData, locale, flipped, onFlip
           <button className="icon-button" type="button" onClick={onForward} disabled={!hasData || !node.children.length} aria-label={text.nextMove}>→</button>
         </div>
       </div>
-      <ChessBoard fen={node.fen} lastMove={node.move} flipped={flipped} locale={locale} onFlip={onFlip} onMove={onMove} />
+      <ChessBoard
+        fen={node.fen}
+        lastMove={node.move}
+        flipped={flipped}
+        locale={locale}
+        lightSquareColor={lightSquareColor}
+        darkSquareColor={darkSquareColor}
+        onFlip={onFlip}
+        onMove={onMove}
+      />
       {hasData ? (
         <>
           {total ? (

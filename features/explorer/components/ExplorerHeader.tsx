@@ -6,9 +6,10 @@ type ExplorerHeaderProps = {
   importing: boolean;
   locale: Locale;
   onLocaleChange: (locale: Locale) => void;
+  onOpenSettings: () => void;
 };
 
-export function ExplorerHeader({ sourceLabel, importing, locale, onLocaleChange }: ExplorerHeaderProps) {
+export function ExplorerHeader({ sourceLabel, importing, locale, onLocaleChange, onOpenSettings }: ExplorerHeaderProps) {
   const text = messages[locale];
 
   return (
@@ -27,6 +28,10 @@ export function ExplorerHeader({ sourceLabel, importing, locale, onLocaleChange 
 
         <div className="header-actions">
           <span className="local-badge"><span aria-hidden="true" /> {text.localPgn}</span>
+          <button className="button settings-button" type="button" onClick={onOpenSettings}>
+            <span aria-hidden="true">⚙</span>
+            {text.settings}
+          </button>
           <div className="language-switch" aria-label={text.language}>
             <button className={locale === "el" ? "active" : ""} type="button" aria-pressed={locale === "el"} onClick={() => onLocaleChange("el")}>GR</button>
             <button className={locale === "en" ? "active" : ""} type="button" aria-pressed={locale === "en"} onClick={() => onLocaleChange("en")}>EN</button>

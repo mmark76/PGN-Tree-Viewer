@@ -5,6 +5,7 @@ import { buildTree, resultCount } from "../features/explorer/services/treeBuilde
 import { firstMovesLabel, gamesLabel, importSuccess } from "../features/explorer/i18n";
 import { playBoardMove } from "../features/explorer/services/boardMove";
 import { Chess } from "chess.js";
+import { DEFAULT_SETTINGS, normalizeSettings } from "../features/explorer/settings";
 
 const collection = `[Event "Game one"]
 [Result "1-0"]
@@ -56,6 +57,24 @@ test("accepts legal board moves and rejects illegal ones", () => {
   assert.equal(legal?.san, "e4");
   assert.match(legal?.fen ?? "", / b /);
   assert.equal(playBoardMove(startFen, "e2", "e5"), null);
+});
+
+test("normalizes saved appearance settings", () => {
+  const settings = normalizeSettings({
+    accentColor: "#123abc",
+    lightSquareColor: "not-a-color",
+    darkSquareColor: "#654321",
+    textSize: "large",
+    boardSize: "compact",
+    font: "modern",
+  });
+
+  assert.equal(settings.accentColor, "#123abc");
+  assert.equal(settings.lightSquareColor, DEFAULT_SETTINGS.lightSquareColor);
+  assert.equal(settings.darkSquareColor, "#654321");
+  assert.equal(settings.textSize, "large");
+  assert.equal(settings.boardSize, "compact");
+  assert.equal(settings.font, "modern");
 });
 
 test("parses multiple PGN games and preserves results", () => {

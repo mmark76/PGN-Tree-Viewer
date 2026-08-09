@@ -12,6 +12,8 @@ type ChessBoardProps = {
   lastMove: MoveCoordinates | null;
   flipped: boolean;
   locale: Locale;
+  lightSquareColor: string;
+  darkSquareColor: string;
   onFlip: () => void;
   onMove: (from: string, to: string) => boolean;
 };
@@ -21,7 +23,7 @@ const notationStyle: CSSProperties = {
   fontWeight: 800,
 };
 
-export function ChessBoard({ fen, lastMove, flipped, locale, onFlip, onMove }: ChessBoardProps) {
+export function ChessBoard({ fen, lastMove, flipped, locale, lightSquareColor, darkSquareColor, onFlip, onMove }: ChessBoardProps) {
   const text = messages[locale];
   const [selection, setSelection] = useState<{ fen: string; square: string } | null>(null);
   const selectedSquare = selection?.fen === fen ? selection.square : null;
@@ -76,10 +78,10 @@ export function ChessBoard({ fen, lastMove, flipped, locale, onFlip, onMove }: C
               }
               setSelection(piece ? { fen, square } : null);
             },
-            lightSquareStyle: { backgroundColor: "#f0d9b5" },
-            darkSquareStyle: { backgroundColor: "#6f8f72" },
-            lightSquareNotationStyle: { ...notationStyle, color: "#6f8f72" },
-            darkSquareNotationStyle: { ...notationStyle, color: "#f0d9b5" },
+            lightSquareStyle: { backgroundColor: lightSquareColor },
+            darkSquareStyle: { backgroundColor: darkSquareColor },
+            lightSquareNotationStyle: { ...notationStyle, color: darkSquareColor },
+            darkSquareNotationStyle: { ...notationStyle, color: lightSquareColor },
             boardStyle: {
               borderRadius: "9px",
               overflow: "hidden",

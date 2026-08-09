@@ -1,17 +1,20 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
-import type { ChangeEvent } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import type { ChangeEvent, CSSProperties } from "react";
 import { firstMovesLabel, gamesLabel, importSuccess, messages } from "../i18n";
 import type { Locale } from "../i18n";
 import { buildTree, indexTree, pathToNode, resultCount } from "../services/treeBuilder";
 import { parsePgnCollection } from "../services/pgnParser";
 import { playBoardMove } from "../services/boardMove";
+import { DEFAULT_SETTINGS, readStoredSettings, storeSettings } from "../settings";
+import type { ExplorerSettings } from "../settings";
 import type { LineRecord } from "../types";
 import { ExplorerFooter } from "./ExplorerFooter";
 import { ExplorerHeader } from "./ExplorerHeader";
 import { MoveTree } from "./MoveTree";
 import { PositionInspector } from "./PositionInspector";
+import { SettingsPanel } from "./SettingsPanel";
 
 export function ExplorerShell() {
   const [lines, setLines] = useState<LineRecord[]>([]);
@@ -26,9 +29,20 @@ export function ExplorerShell() {
   const [collapsedIds, setCollapsedIds] = useState<Set<string>>(new Set());
   const [zoom, setZoom] = useState(0.82);
   const [flipped, setFlipped] = useState(false);
+  const [settings, setSettings] = useState<ExplorerSettings>({ ...DEFAULT_SETTINGS });
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const selected = index.get(selectedId) ?? tree;
   const hasTree = tree.children.length > 0;
   const text = messages[locale];
+  const appStyle = {
+    "--forest": settings.accentColor,
+    "--forest-2": settings.accentColor,
+  } as CSSProperties;
+
+  useEffect(() => {
+    const frame = window.requestAnimationFrame(() => setSettings(readStoredSettings()));
+    return () => window.cancelAnimationFrame(frame);
+  }, []);
 
   const openPgnPicker = () => fileInput.current?.click();
 
@@ -36,6 +50,11 @@ export function ExplorerShell() {
     setLocale(nextLocale);
     document.documentElement.lang = nextLocale;
     setNotice("");
+  };
+
+  const changeSettings = (nextSettings: ExplorerSettings) => {
+    setSettings(nextSettings);
+    storeSettings(nextSettings);
   };
 
   const importPgn = async (event: ChangeEvent<HTMLInputElement>) => {
@@ -111,13 +130,20 @@ export function ExplorerShell() {
   };
 
   return (
-    <div className="app-shell">
+    <div
+      className="app-shell"
+      data-text-size={settings.textSize}
+      data-board-size={settings.boardSize}
+      data-font={settings.font}
+      style={appStyle}
+    >
       <input ref={fileInput} id="pgn-file" className="file-input" type="file" accept=".pgn,text/plain" onChange={importPgn} />
       <ExplorerHeader
         sourceLabel={fileName || text.noPgnSource}
         importing={importing}
         locale={locale}
         onLocaleChange={changeLocale}
+        onOpenSettings={() => setSettingsOpen(true)}
       />
       <main className="workspace">
         <section className="tree-section" id="move-tree">
@@ -160,10 +186,20 @@ export function ExplorerShell() {
           onBack={() => selected.parentId && setSelectedId(selected.parentId)}
           onForward={() => selected.children[0] && setSelectedId(selected.children[0].id)}
           onMove={addMoveFromBoard}
+          lightSquareColor={settings.lightSquareColor}
+          darkSquareColor={settings.darkSquareColor}
           sourceNote={hasTree ? (fileName ? `${fileName} · ${gamesLabel(locale, resultCount(tree.results))}` : "") : text.waitingForPgn}
         />
       </main>
       <ExplorerFooter locale={locale} />
+      {settingsOpen && (
+        <SettingsPanel
+          locale={locale}
+          settings={settings}
+          onChange={changeSettings}
+          onClose={() => setSettingsOpen(false)}
+        />
+      )}
     </div>
   );
 }
