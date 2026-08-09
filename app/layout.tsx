@@ -15,7 +15,7 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "PGN Tree Viewer",
   description:
-    "Διαδραστικός χάρτης σκακιστικών ανοιγμάτων με σκακιέρα, στατιστικά και εισαγωγή PGN.",
+    "Interactive chess opening map with a live board, move statistics, and local PGN import.",
   other: {
     "codex-preview": "development",
   },
@@ -31,7 +31,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="el">
+    <html lang="en">
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
