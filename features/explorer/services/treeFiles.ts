@@ -106,7 +106,7 @@ export function serializeTreeToPgn(root: TreeNode) {
   if (!root.children.length) throw new Error("Cannot export an empty tree");
   const moves = serializeContinuation(root);
   return [
-    '[Event "ChessTree Export"]',
+    '[Event "Chess Tree Builder Export"]',
     '[Site "chesstree.markellosecosystem.com"]',
     '[Result "*"]',
     "",
@@ -129,8 +129,8 @@ export function serializeTreeToSvg(root: TreeNode, locale: Locale, accentColor: 
   return [
     '<?xml version="1.0" encoding="UTF-8"?>',
     `<svg xmlns="http://www.w3.org/2000/svg" width="${layout.width}" height="${layout.height}" viewBox="0 0 ${layout.width} ${layout.height}" role="img" aria-labelledby="title description">`,
-    '<title id="title">ChessTree move tree</title>',
-    '<desc id="description">Chess opening move tree exported from ChessTree.</desc>',
+    '<title id="title">Chess Tree Builder move tree</title>',
+    '<desc id="description">Chess opening move tree exported from Chess Tree Builder.</desc>',
     '<rect width="100%" height="100%" fill="#f3f1ea"/>',
     `<g fill="none" stroke="${accentColor}" stroke-opacity="0.42" stroke-width="2">${edgeMarkup}</g>`,
     `<g font-family="Arial, Helvetica, sans-serif">${nodeMarkup}</g>`,
@@ -204,6 +204,7 @@ function serializeMove(node: TreeNode) {
 
 export function downloadBaseName(sourceFileName: string) {
   const withoutExtension = sourceFileName
+    .replace(/\.chess-tree-builder\.json$/i, "")
     .replace(/\.chesstree\.json$/i, "")
     .replace(/\.(pgn|json|svg)$/i, "")
     .trim();
@@ -211,7 +212,11 @@ export function downloadBaseName(sourceFileName: string) {
     .replace(/[^\p{L}\p{N}_-]+/gu, "-")
     .replace(/^-+|-+$/g, "")
     .slice(0, 80);
-  return safeName ? (safeName.toLowerCase().endsWith("-tree") ? safeName : `${safeName}-tree`) : "chesstree";
+  return safeName
+    ? safeName.toLowerCase().endsWith("-tree")
+      ? safeName
+      : `${safeName}-tree`
+    : "chess-tree-builder";
 }
 
 export function downloadTextFile(content: string, fileName: string, mimeType: string) {

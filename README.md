@@ -1,7 +1,7 @@
-# ChessTree
+# Chess Tree Builder
 
-ChessTree is an interactive chess-opening explorer with a move tree, a live
-board, local PGN and ChessTree JSON import, move/result statistics, downloadable
+Chess Tree Builder is an interactive chess-opening explorer with a move tree, a live
+board, local PGN and Chess Tree Builder JSON import, move/result statistics, downloadable
 PGN/JSON/SVG exports, and locally saved appearance settings.
 
 ## Features
@@ -11,7 +11,7 @@ PGN/JSON/SVG exports, and locally saved appearance settings.
 - interactive variation tree with collapse, expand, zoom, and scrolling
 - board position synchronized with the selected move
 - legal board moves create nodes and alternative branches in the tree
-- local import of one or more PGN games or a complete ChessTree JSON file
+- local import of one or more PGN games or a complete Chess Tree Builder JSON file
 - download of the complete tree as PGN variations, lossless JSON, or an SVG image
 - automatic popularity and result percentages
 - responsive desktop and mobile layout

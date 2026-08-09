@@ -22,7 +22,7 @@ export function ExplorerHeader({ sourceLabel, importing, locale, downloadDisable
           <div className="header-title-row">
             <div className="brand-mark" aria-hidden="true">♘</div>
             <div>
-              <h1>PGN Tree Viewer</h1>
+              <h1>Chess Tree Builder</h1>
               <p className="header-source">{sourceLabel}</p>
             </div>
           </div>
