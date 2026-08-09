@@ -14,7 +14,7 @@ type PositionInspectorProps = {
   onBack: () => void;
   onForward: () => void;
   onMove: (from: string, to: string) => boolean;
-  sourceNote: string;
+  sourceNote?: string;
 };
 
 export function PositionInspector({ node, path, hasData, locale, flipped, onFlip, onBack, onForward, onMove, sourceNote }: PositionInspectorProps) {
@@ -64,7 +64,7 @@ export function PositionInspector({ node, path, hasData, locale, flipped, onFlip
             <p>{opening === "__manual__" ? text.manualLine : opening}</p>
             <div className="move-path">{formatPath(path) || text.chooseMove}</div>
           </div>
-          <div className="source-note"><span className="status-dot" /> {sourceNote}</div>
+          {sourceNote && <div className="source-note"><span className="status-dot" /> {sourceNote}</div>}
         </>
       ) : (
         <div className="position-empty">

@@ -54,33 +54,33 @@ export function MoveTree({ root, selectedId, collapsedIds, zoom, locale, onSelec
             const white = total ? (node.results.white / total) * 100 : 0;
             const draw = total ? (node.results.draw / total) * 100 : 0;
             const black = total ? Math.max(0, 100 - white - draw) : 0;
-            const countLabel = total
-              ? gamesLabel(locale, total)
-              : node.id === "start" ? text.manualTree : text.manualMove;
+            const countLabel = total ? gamesLabel(locale, total) : "";
             return (
               <div key={node.id} className="tree-node-wrap" style={{ left: node.x, top: node.y }}>
                 <button
                   type="button"
                   className={`move-node${node.id === selectedId ? " selected" : ""}${node.id === "start" ? " root" : ""}`}
                   onClick={() => onSelect(node.id)}
-                  aria-label={`${node.id === "start" ? text.start : node.san}, ${countLabel}`}
+                  aria-label={`${node.id === "start" ? text.start : node.san}${countLabel ? `, ${countLabel}` : ""}`}
                 >
                   {node.id === "start" ? (
-                    <><strong>{text.start}</strong><small>{countLabel}</small></>
+                    <><strong>{text.start}</strong>{countLabel && <small>{countLabel}</small>}</>
                   ) : (
                     <>
                       <span className="node-top">
                         <span className="node-san">{node.san}</span>
                         <span className="node-rate">{parentShare}%</span>
                       </span>
-                      <span className="node-bottom">
-                        <span>{countLabel}</span>
-                        <span className="node-results" aria-hidden="true">
-                          <span style={{ width: `${white}%` }} />
-                          <span style={{ width: `${draw}%` }} />
-                          <span style={{ width: `${black}%` }} />
+                      {countLabel && (
+                        <span className="node-bottom">
+                          <span>{countLabel}</span>
+                          <span className="node-results" aria-hidden="true">
+                            <span style={{ width: `${white}%` }} />
+                            <span style={{ width: `${draw}%` }} />
+                            <span style={{ width: `${black}%` }} />
+                          </span>
                         </span>
-                      </span>
+                      )}
                     </>
                   )}
                 </button>
