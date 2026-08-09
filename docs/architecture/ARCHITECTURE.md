@@ -7,7 +7,7 @@ The application is a client-side chess repertoire explorer. It starts with an em
 ## Data flow
 
 ```text
-Manual lines / local PGN file
+Manual lines / local PGN or ChessTree JSON file
           ↓
 LineRecord[]
           ↓
@@ -16,6 +16,8 @@ treeBuilder
 TreeNode hierarchy + FEN positions + result totals
           ↓
 MoveTree and PositionInspector
+          ↓
+PGN / JSON / SVG download
 ```
 
 ## Feature boundaries
@@ -23,6 +25,7 @@ MoveTree and PositionInspector
 - `services/pgnParser.ts`: converts PGN text into normalized line records.
 - `services/treeBuilder.ts`: validates moves, merges common paths and aggregates results.
 - `services/treeLayout.ts`: assigns visual coordinates without depending on React.
+- `services/treeFiles.ts`: validates ChessTree JSON and serializes PGN, JSON and SVG downloads.
 - `components/MoveTree.tsx`: renders and controls the variation tree.
 - `components/ChessBoard.tsx`: renders a FEN position and reports drag or click moves.
 - `components/PositionInspector.tsx`: presents the selected position and statistics.
@@ -34,4 +37,4 @@ MoveTree and PositionInspector
 2. **One internal tree model.** Manual data and imported games use the same `LineRecord → TreeNode` path.
 3. **Chess.js at the validation boundary.** SAN parsing and FEN generation are delegated to a focused chess rules library.
 4. **Board-driven branches.** A legal move extends the selected node; playing from an earlier node naturally creates an alternative branch.
-5. **No persistence yet.** The present scope does not need accounts or a database. Persistent repertoires can be added later behind a storage service.
+5. **Portable local persistence.** A versioned JSON file preserves the complete repertoire and appearance settings without accounts, a backend or remote storage.
