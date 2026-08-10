@@ -4,6 +4,7 @@ import { layoutTree } from "../services/treeLayout";
 import { popularityPercentage, resultCount } from "../services/treeBuilder";
 import { gamesLabel, messages } from "../i18n";
 import type { Locale } from "../i18n";
+import type { TreeDirection } from "../settings";
 
 type MoveTreeProps = {
   root: TreeNode;
@@ -11,13 +12,14 @@ type MoveTreeProps = {
   collapsedIds: Set<string>;
   zoom: number;
   locale: Locale;
+  direction: TreeDirection;
   onSelect: (id: string) => void;
   onToggle: (id: string) => void;
 };
 
-export function MoveTree({ root, selectedId, collapsedIds, zoom, locale, onSelect, onToggle }: MoveTreeProps) {
+export function MoveTree({ root, selectedId, collapsedIds, zoom, locale, direction, onSelect, onToggle }: MoveTreeProps) {
   const text = messages[locale];
-  const layout = useMemo(() => layoutTree(root, collapsedIds), [root, collapsedIds]);
+  const layout = useMemo(() => layoutTree(root, collapsedIds, direction), [root, collapsedIds, direction]);
   const selectedAncestors = useMemo(() => {
     const ids = new Set<string>();
     let current = layout.nodes.find((node) => node.id === selectedId);
@@ -29,7 +31,7 @@ export function MoveTree({ root, selectedId, collapsedIds, zoom, locale, onSelec
   }, [layout.nodes, selectedId]);
 
   return (
-    <div className="tree-viewport">
+    <div className="tree-viewport" data-orientation={direction}>
       <div
         className="tree-canvas"
         style={{ width: layout.width * zoom, height: layout.height * zoom }}
@@ -38,12 +40,15 @@ export function MoveTree({ root, selectedId, collapsedIds, zoom, locale, onSelec
           <svg className="tree-lines" width={layout.width} height={layout.height} aria-hidden="true">
             {layout.edges.map(({ from, to }) => {
               const midX = from.x + (to.x - from.x) * 0.52;
+              const midY = from.y + (to.y - from.y) * 0.52;
               const active = selectedAncestors.has(from.id) && selectedAncestors.has(to.id);
               return (
                 <path
                   key={`${from.id}-${to.id}`}
                   className={`tree-line${active ? " selected" : ""}`}
-                  d={`M ${from.x + 71} ${from.y} C ${midX} ${from.y}, ${midX} ${to.y}, ${to.x - 71} ${to.y}`}
+                  d={direction === "right"
+                    ? `M ${from.x + 71} ${from.y} C ${midX} ${from.y}, ${midX} ${to.y}, ${to.x - 71} ${to.y}`
+                    : `M ${from.x} ${from.y + 33} C ${from.x} ${midY}, ${to.x} ${midY}, ${to.x} ${to.y - 33}`}
                 />
               );
             })}

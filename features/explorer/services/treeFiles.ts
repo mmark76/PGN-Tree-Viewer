@@ -1,6 +1,7 @@
 import { Chess } from "chess.js";
 import { normalizeSettings } from "../settings";
 import type { ExplorerSettings } from "../settings";
+import type { TreeDirection } from "../settings";
 import type { LineRecord, ResultTotals, TreeNode } from "../types";
 import { gamesLabel } from "../i18n";
 import type { Locale } from "../i18n";
@@ -115,13 +116,17 @@ export function serializeTreeToPgn(root: TreeNode) {
   ].join("\n");
 }
 
-export function serializeTreeToSvg(root: TreeNode, locale: Locale, accentColor: string) {
+export function serializeTreeToSvg(root: TreeNode, locale: Locale, accentColor: string, direction: TreeDirection = "right") {
   if (!root.children.length) throw new Error("Cannot export an empty tree");
-  const layout = layoutTree(root, new Set());
+  const layout = layoutTree(root, new Set(), direction);
   const edgeMarkup = layout.edges
     .map(({ from, to }) => {
       const midX = from.x + (to.x - from.x) * 0.52;
-      return `<path d="M ${from.x + 71} ${from.y} C ${midX} ${from.y}, ${midX} ${to.y}, ${to.x - 71} ${to.y}"/>`;
+      const midY = from.y + (to.y - from.y) * 0.52;
+      const path = direction === "right"
+        ? `M ${from.x + 71} ${from.y} C ${midX} ${from.y}, ${midX} ${to.y}, ${to.x - 71} ${to.y}`
+        : `M ${from.x} ${from.y + 33} C ${from.x} ${midY}, ${to.x} ${midY}, ${to.x} ${to.y - 33}`;
+      return `<path d="${path}"/>`;
     })
     .join("");
   const nodeMarkup = layout.nodes.map((node) => serializeSvgNode(node, locale, accentColor)).join("");

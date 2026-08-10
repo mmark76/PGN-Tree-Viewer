@@ -6,6 +6,10 @@ import { DEFAULT_LOCALE, firstMovesLabel, gamesLabel, importSuccess, messages } 
 import { playBoardMove } from "../features/explorer/services/boardMove";
 import { Chess } from "chess.js";
 import { DEFAULT_SETTINGS, normalizeSettings } from "../features/explorer/settings";
+import { validateSanSequence } from "../features/explorer/services/sanParser";
+import { layoutTree } from "../features/explorer/services/treeLayout";
+import { createSanPasteState, sanPasteReducer } from "../features/explorer/services/sanPasteState";
+import { formatBuildVersion } from "../features/explorer/services/buildVersion";
 import {
   downloadBaseName,
   parseChessTreeJson,
@@ -153,4 +157,61 @@ test("creates safe download file names", () => {
   assert.equal(downloadBaseName("Sicilian-study-tree.chesstree.json"), "Sicilian-study-tree");
   assert.equal(downloadBaseName("Sicilian-study-tree.chess-tree-builder.json"), "Sicilian-study-tree");
   assert.equal(downloadBaseName(""), "chess-tree-builder");
+});
+
+test("validates numbered SAN text and normalizes the moves", () => {
+  const result = validateSanSequence("1. e4 e5 2. Nf3 Nc6 3. Bb5");
+  assert.equal(result.valid, true);
+  if (result.valid) assert.deepEqual(result.moves, ["e4", "e5", "Nf3", "Nc6", "Bb5"]);
+});
+
+test("reports the first invalid SAN move", () => {
+  const result = validateSanSequence("1. e4 e5 2. NotAMove Nc6");
+  assert.equal(result.valid, false);
+  if (!result.valid) {
+    assert.equal(result.invalidToken, "NotAMove");
+    assert.equal(result.tokenNumber, 3);
+    assert.deepEqual(result.moves, ["e4", "e5"]);
+  }
+});
+
+test("validates SAN from a selected position", () => {
+  const chess = new Chess();
+  chess.move("e4");
+  const result = validateSanSequence("c5 2. Nf3", chess.fen());
+  assert.equal(result.valid, true);
+  if (result.valid) assert.deepEqual(result.moves, ["c5", "Nf3"]);
+});
+
+test("lays out the move tree to the right or downward", () => {
+  const tree = buildTree(parsePgnCollection(collection).lines);
+  const right = layoutTree(tree, new Set(), "right");
+  const down = layoutTree(tree, new Set(), "down");
+  const rightRoot = right.nodes.find((node) => node.id === "start")!;
+  const rightChild = right.nodes.find((node) => node.parentId === "start")!;
+  const downRoot = down.nodes.find((node) => node.id === "start")!;
+  const downChild = down.nodes.find((node) => node.parentId === "start")!;
+
+  assert.ok(rightChild.x > rightRoot.x);
+  assert.ok(downChild.y > downRoot.y);
+});
+
+test("clears validated SAN when clipboard content is replaced with empty text", () => {
+  const valid = validateSanSequence("e4");
+  let state = createSanPasteState();
+  state = sanPasteReducer(state, { type: "edit", value: "e4" });
+  state = sanPasteReducer(state, { type: "validated", fromStart: valid, fromSelected: valid });
+  state = sanPasteReducer(state, { type: "replace", value: "" });
+
+  assert.equal(state.value, "");
+  assert.equal(state.fromStart, null);
+  assert.equal(state.fromSelected, null);
+});
+
+test("marks uncommitted builds as dirty", () => {
+  const clean = formatBuildVersion(new Date("2026-08-10T15:46:00Z"), "abcdef0", false);
+  const dirty = formatBuildVersion(new Date("2026-08-10T15:46:00Z"), "abcdef0", true);
+
+  assert.equal(clean, "version_20260810_1846_commit_abcdef0");
+  assert.equal(dirty, "version_20260810_1846_commit_abcdef0_dirty");
 });
