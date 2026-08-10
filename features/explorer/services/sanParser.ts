@@ -27,13 +27,38 @@ export function validateSanSequence(text: string, startFen?: string): SanValidat
 }
 
 function tokenizeSan(text: string) {
-  return text
+  const withoutHeaders = text.replace(
+    /^\s*\[[A-Za-z0-9_]+\s+"(?:\\.|[^"\\])*"\]\s*$/gm,
+    " ",
+  );
+  const withoutComments = withoutHeaders
     .replace(/\{[^}]*\}/g, " ")
     .replace(/;[^\r\n]*/g, " ")
-    .replace(/\$\d+/g, " ")
+    .replace(/\$\d+/g, " ");
+
+  return stripVariations(withoutComments)
     .split(/\s+/)
     .map((token) => token.trim())
     .filter(Boolean)
     .map((token) => token.replace(/^\d+\.(?:\.\.)?/, ""))
     .filter((token) => token && !/^(?:1-0|0-1|1\/2-1\/2|\*)$/.test(token));
+}
+
+function stripVariations(text: string) {
+  let depth = 0;
+  let mainLine = "";
+
+  for (const character of text) {
+    if (character === "(") {
+      depth += 1;
+      continue;
+    }
+    if (character === ")") {
+      depth = Math.max(0, depth - 1);
+      continue;
+    }
+    if (depth === 0) mainLine += character;
+  }
+
+  return mainLine;
 }

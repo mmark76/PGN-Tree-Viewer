@@ -183,6 +183,25 @@ test("validates SAN from a selected position", () => {
   if (result.valid) assert.deepEqual(result.moves, ["c5", "Nf3"]);
 });
 
+test("extracts the main line from a complete pasted PGN", () => {
+  const pastedPgn = `[Event "English Reversed Dragon for White by GM"]
+[Site "?"]
+[Date "????.??.??"]
+[Round "?"]
+[White "Main line"]
+[Black "?"]
+[Result "*"]
+
+1. Nf3 d5 2. g3 c5 (2... Nf6 3. Bg2) 3. Bg2 Nc6 $1
+4. O-O {Main-line comment} e5 *`;
+  const result = validateSanSequence(pastedPgn);
+
+  assert.equal(result.valid, true);
+  if (result.valid) {
+    assert.deepEqual(result.moves, ["Nf3", "d5", "g3", "c5", "Bg2", "Nc6", "O-O", "e5"]);
+  }
+});
+
 test("lays out the move tree to the right or downward", () => {
   const tree = buildTree(parsePgnCollection(collection).lines);
   const right = layoutTree(tree, new Set(), "right");
