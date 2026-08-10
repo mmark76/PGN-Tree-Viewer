@@ -124,8 +124,8 @@ export function serializeTreeToSvg(root: TreeNode, locale: Locale, accentColor: 
       const midX = from.x + (to.x - from.x) * 0.52;
       const midY = from.y + (to.y - from.y) * 0.52;
       const path = direction === "right"
-        ? `M ${from.x + 71} ${from.y} C ${midX} ${from.y}, ${midX} ${to.y}, ${to.x - 71} ${to.y}`
-        : `M ${from.x} ${from.y + 33} C ${from.x} ${midY}, ${to.x} ${midY}, ${to.x} ${to.y - 33}`;
+        ? `M ${from.x + 29} ${from.y} C ${midX} ${from.y}, ${midX} ${to.y}, ${to.x - 29} ${to.y}`
+        : `M ${from.x} ${from.y + 29} C ${from.x} ${midY}, ${to.x} ${midY}, ${to.x} ${to.y - 29}`;
       return `<path d="${path}"/>`;
     })
     .join("");
@@ -146,10 +146,7 @@ export function serializeTreeToSvg(root: TreeNode, locale: Locale, accentColor: 
 }
 
 function serializeSvgNode(node: TreeNode & { x: number; y: number; parentCount: number }, locale: Locale, accentColor: string) {
-  const width = 142;
-  const height = 66;
-  const left = node.x - width / 2;
-  const top = node.y - height / 2;
+  const radius = 29;
   const total = resultCount(node.results);
   const share = popularityPercentage(node.results, node.parentCount);
   const isRoot = node.id === "start";
@@ -159,15 +156,13 @@ function serializeSvgNode(node: TreeNode & { x: number; y: number; parentCount: 
   const countLabel = total ? gamesLabel(locale, total) : "";
 
   return [
-    `<g transform="translate(${left} ${top})">`,
-    `<rect width="${width}" height="${height}" rx="14" fill="${fill}" stroke="${accentColor}" stroke-width="${isRoot ? 0 : 1.5}"/>`,
-    `<text x="${isRoot ? width / 2 : 12}" y="${countLabel ? 28 : 39}" text-anchor="${isRoot ? "middle" : "start"}" fill="${foreground}" font-size="${isRoot ? 15 : 18}" font-weight="700">${escapeXml(label)}</text>`,
+    `<g>`,
+    `<circle cx="${node.x}" cy="${node.y}" r="${radius}" fill="${fill}" stroke="${accentColor}" stroke-width="${isRoot ? 0 : 1.5}"/>`,
+    `<text x="${node.x}" y="${node.y + 5}" text-anchor="middle" fill="${foreground}" font-size="${isRoot ? 13 : 14}" font-weight="700">${escapeXml(label)}</text>`,
     share === null
       ? ""
-      : `<text x="130" y="27" text-anchor="end" fill="${accentColor}" font-size="11" font-weight="700">${share}%</text>`,
-    countLabel
-      ? `<text x="${isRoot ? width / 2 : 12}" y="49" text-anchor="${isRoot ? "middle" : "start"}" fill="${isRoot ? "#e7f2ed" : "#66736b"}" font-size="10">${escapeXml(countLabel)}</text>`
-      : "",
+      : `<text x="${node.x + 27}" y="${node.y + 31}" text-anchor="end" fill="${accentColor}" font-size="9" font-weight="700">${share}%</text>`,
+    countLabel ? `<title>${escapeXml(`${label}, ${countLabel}`)}</title>` : "",
     "</g>",
   ].join("");
 }

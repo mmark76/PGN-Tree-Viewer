@@ -416,6 +416,12 @@ button {
   font-weight: 800;
 }
 
+.icon-button.active {
+  border-color: var(--forest);
+  background: var(--forest);
+  color: white;
+}
+
 .zoom-value {
   width: 42px;
   color: var(--muted);
@@ -484,23 +490,25 @@ button {
 
 .tree-node-wrap {
   position: absolute;
-  width: 142px;
-  min-height: 66px;
+  width: 58px;
+  height: 58px;
   transform: translate(-50%, -50%);
   z-index: 2;
 }
 
 .move-node {
   position: relative;
-  width: 100%;
-  min-height: 66px;
+  width: 58px;
+  height: 58px;
+  display: grid;
+  place-items: center;
   border: 1px solid #c9c9bf;
-  border-radius: 14px;
+  border-radius: 50%;
   background: #fffef9;
   box-shadow: 0 8px 20px rgba(33, 43, 37, 0.08);
   cursor: pointer;
-  padding: 9px 10px;
-  text-align: left;
+  padding: 5px;
+  text-align: center;
 }
 
 .move-node:hover {
@@ -515,55 +523,35 @@ button {
 }
 
 .move-node.root {
-  display: grid;
-  place-items: center;
   background: var(--forest);
   color: white;
-  text-align: center;
-}
-
-.node-top,
-.node-bottom {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
 }
 
 .node-san {
   font-family: var(--heading-font);
-  font-size: calc(18px + var(--font-step));
+  font-size: calc(14px + var(--font-step));
   font-weight: 700;
+  line-height: 1;
 }
 
 .node-rate {
-  color: var(--forest-2);
-  font-size: calc(11px + var(--font-step));
-  font-weight: 800;
-}
-
-.node-bottom {
-  margin-top: 6px;
-  color: var(--muted);
-  font-size: calc(10px + var(--font-step));
-}
-
-.node-results {
-  display: flex;
-  width: 52px;
-  height: 4px;
-  overflow: hidden;
+  position: absolute;
+  right: -7px;
+  bottom: -6px;
+  min-width: 27px;
+  padding: 2px 4px;
+  border: 1px solid color-mix(in srgb, var(--forest) 35%, white);
   border-radius: 999px;
-  background: #ddd;
+  background: white;
+  color: var(--forest);
+  font-size: 9px;
+  font-weight: 800;
+  line-height: 1.2;
 }
-
-.node-results span:nth-child(1) { background: var(--lime); }
-.node-results span:nth-child(2) { background: #9aa19b; }
-.node-results span:nth-child(3) { background: var(--rust); }
 
 .collapse-control {
   position: absolute;
-  right: -9px;
+  right: -7px;
   top: 50%;
   width: 18px;
   height: 18px;
@@ -581,7 +569,7 @@ button {
 .tree-viewport[data-orientation="down"] .collapse-control {
   right: auto;
   top: auto;
-  bottom: -9px;
+  bottom: -7px;
   left: 50%;
   transform: translateX(-50%);
 }

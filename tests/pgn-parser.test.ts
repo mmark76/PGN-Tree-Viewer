@@ -7,7 +7,7 @@ import { playBoardMove } from "../features/explorer/services/boardMove";
 import { Chess } from "chess.js";
 import { DEFAULT_SETTINGS, normalizeSettings } from "../features/explorer/settings";
 import { validateSanSequence } from "../features/explorer/services/sanParser";
-import { layoutTree } from "../features/explorer/services/treeLayout";
+import { fitTreeZoom, layoutTree } from "../features/explorer/services/treeLayout";
 import { createSanPasteState, sanPasteReducer } from "../features/explorer/services/sanPasteState";
 import { formatBuildVersion } from "../features/explorer/services/buildVersion";
 import {
@@ -242,6 +242,11 @@ test("lays out the move tree to the right or downward", () => {
 
   assert.ok(rightChild.x > rightRoot.x);
   assert.ok(downChild.y > downRoot.y);
+});
+
+test("fits the complete tree inside the available viewport", () => {
+  assert.equal(fitTreeZoom(2000, 1000, 1000, 600), 0.472);
+  assert.equal(fitTreeZoom(400, 300, 1000, 700), 1);
 });
 
 test("clears validated SAN when clipboard content is replaced with empty text", () => {

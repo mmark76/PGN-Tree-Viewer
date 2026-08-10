@@ -7,7 +7,8 @@
 - Create or replace the tree from a valid PGN import.
 - Select a move and display the exact board position.
 - Navigate backward and along the most popular continuation.
-- Collapse and expand branches; zoom and scroll large trees.
+- Render moves as compact circular nodes with short connectors.
+- Automatically fit the complete tree to the viewport while retaining manual zoom, collapse, expand, and scrolling.
 - Display the move tree either from left to right or from top to bottom.
 - Import local `.pgn` files containing one or more games and `.json` Chess Tree Builder files.
 - Paste and validate a SAN line or complete PGN text, preserving recursive variations as tree branches.

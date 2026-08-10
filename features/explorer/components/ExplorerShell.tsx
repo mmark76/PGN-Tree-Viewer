@@ -7,6 +7,7 @@ import type { Locale } from "../i18n";
 import { buildTree, indexTree, pathToNode, resultCount } from "../services/treeBuilder";
 import { parsePgnCollection } from "../services/pgnParser";
 import { playBoardMove } from "../services/boardMove";
+import { MAX_TREE_ZOOM, MIN_TREE_ZOOM } from "../services/treeLayout";
 import {
   downloadBaseName,
   downloadTextFile,
@@ -39,6 +40,8 @@ export function ExplorerShell() {
   const [selectedId, setSelectedId] = useState("start");
   const [collapsedIds, setCollapsedIds] = useState<Set<string>>(new Set());
   const [zoom, setZoom] = useState(0.82);
+  const [fitToViewport, setFitToViewport] = useState(true);
+  const [fitRequest, setFitRequest] = useState(0);
   const [flipped, setFlipped] = useState(false);
   const [settings, setSettings] = useState<ExplorerSettings>({ ...DEFAULT_SETTINGS });
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -66,8 +69,22 @@ export function ExplorerShell() {
   };
 
   const changeSettings = (nextSettings: ExplorerSettings) => {
+    if (nextSettings.treeDirection !== settings.treeDirection) {
+      setFitToViewport(true);
+      setFitRequest((value) => value + 1);
+    }
     setSettings(nextSettings);
     storeSettings(nextSettings);
+  };
+
+  const changeZoom = (step: number) => {
+    setFitToViewport(false);
+    setZoom((value) => Math.min(MAX_TREE_ZOOM, Math.max(MIN_TREE_ZOOM, value + step)));
+  };
+
+  const fitTreeToViewport = () => {
+    setFitToViewport(true);
+    setFitRequest((value) => value + 1);
   };
 
   const importFile = async (event: ChangeEvent<HTMLInputElement>) => {
@@ -97,6 +114,8 @@ export function ExplorerShell() {
       setFileName(file.name);
       setSelectedId("start");
       setCollapsedIds(new Set());
+      setFitToViewport(true);
+      setFitRequest((value) => value + 1);
     } catch (error) {
       setNotice(isJson ? text.invalidTreeFile : error instanceof Error ? error.message : text.readFailed);
     } finally {
@@ -197,6 +216,8 @@ export function ExplorerShell() {
     setSelectedId("start");
     setCollapsedIds(new Set());
     setSanOpen(false);
+    setFitToViewport(true);
+    setFitRequest((value) => value + 1);
     setNotice(text.sanTreeCreated);
   };
 
@@ -239,9 +260,19 @@ export function ExplorerShell() {
                   {resultCount(tree.results) ? `${gamesLabel(locale, resultCount(tree.results))} · ` : ""}
                   {firstMovesLabel(locale, tree.children.length)}
                 </span>
-                <button className="icon-button" type="button" onClick={() => setZoom((value) => Math.max(0.55, value - 0.1))} aria-label={text.zoomOut}>−</button>
+                <button className="icon-button" type="button" onClick={() => changeZoom(-0.1)} aria-label={text.zoomOut}>−</button>
                 <span className="zoom-value">{Math.round(zoom * 100)}%</span>
-                <button className="icon-button" type="button" onClick={() => setZoom((value) => Math.min(1.2, value + 0.1))} aria-label={text.zoomIn}>+</button>
+                <button className="icon-button" type="button" onClick={() => changeZoom(0.1)} aria-label={text.zoomIn}>+</button>
+                <button
+                  className={`icon-button${fitToViewport ? " active" : ""}`}
+                  type="button"
+                  onClick={fitTreeToViewport}
+                  aria-label={text.fitTree}
+                  aria-pressed={fitToViewport}
+                  title={text.fitTree}
+                >
+                  ⛶
+                </button>
                 <button className="icon-button" type="button" onClick={() => setCollapsedIds(new Set())} aria-label={text.expandAll}>↗</button>
               </div>
             ) : (
@@ -252,7 +283,19 @@ export function ExplorerShell() {
           </div>
           {notice && <div className={`notice${notice === text.noValidMoves || notice === text.invalidTreeFile || notice === text.fileTooLarge || notice === text.readFailed ? " error" : ""}`} role="status">{notice}</div>}
           {hasTree ? (
-            <MoveTree root={tree} selectedId={selectedId} collapsedIds={collapsedIds} zoom={zoom} locale={locale} direction={settings.treeDirection} onSelect={setSelectedId} onToggle={toggleBranch} />
+            <MoveTree
+              root={tree}
+              selectedId={selectedId}
+              collapsedIds={collapsedIds}
+              zoom={zoom}
+              fitToViewport={fitToViewport}
+              fitRequest={fitRequest}
+              locale={locale}
+              direction={settings.treeDirection}
+              onZoomChange={setZoom}
+              onSelect={setSelectedId}
+              onToggle={toggleBranch}
+            />
           ) : (
             <div className="tree-empty" aria-label={text.emptyTreeArea} />
           )}
