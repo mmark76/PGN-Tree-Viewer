@@ -19,9 +19,9 @@ export const DEFAULT_SETTINGS: ExplorerSettings = {
   accentColor: "#173f32",
   lightSquareColor: "#f0d9b5",
   darkSquareColor: "#6f8f72",
-  textSize: "standard",
-  boardSize: "standard",
-  font: "classic",
+  textSize: "small",
+  boardSize: "compact",
+  font: "serif",
   treeDirection: "right",
 };
 
