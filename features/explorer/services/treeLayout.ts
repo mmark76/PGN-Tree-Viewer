@@ -2,10 +2,28 @@ import type { PositionedNode, TreeEdge, TreeNode } from "../types";
 import { resultCount } from "./treeBuilder";
 import type { TreeDirection } from "../settings";
 
-const horizontalGap = 190;
-const verticalGap = 90;
-const marginX = 94;
-const marginY = 62;
+const horizontalGap = 82;
+const verticalGap = 70;
+const marginX = 54;
+const marginY = 48;
+
+export const MIN_TREE_ZOOM = 0.02;
+export const MAX_TREE_ZOOM = 1.2;
+
+export function fitTreeZoom(
+  treeWidth: number,
+  treeHeight: number,
+  viewportWidth: number,
+  viewportHeight: number,
+  padding = 28,
+) {
+  if (treeWidth <= 0 || treeHeight <= 0 || viewportWidth <= 0 || viewportHeight <= 0) return 1;
+
+  const availableWidth = Math.max(1, viewportWidth - padding * 2);
+  const availableHeight = Math.max(1, viewportHeight - padding * 2);
+  const fitted = Math.min(1, availableWidth / treeWidth, availableHeight / treeHeight);
+  return Math.max(MIN_TREE_ZOOM, Math.floor(fitted * 1000) / 1000);
+}
 
 export function layoutTree(root: TreeNode, collapsedIds: Set<string>, direction: TreeDirection = "right") {
   const positioned = new Map<string, PositionedNode>();
@@ -43,11 +61,11 @@ export function layoutTree(root: TreeNode, collapsedIds: Set<string>, direction:
     nodes,
     edges,
     width: direction === "right"
-      ? Math.max(860, ...nodes.map((node) => node.x + 110))
-      : Math.max(860, ...nodes.map((node) => node.x + 110)),
+      ? Math.max(860, ...nodes.map((node) => node.x + 54))
+      : Math.max(860, ...nodes.map((node) => node.x + 54)),
     height: direction === "right"
       ? Math.max(650, marginY * 2 + Math.max(1, nextLeaf - 1) * verticalGap)
-      : Math.max(650, ...nodes.map((node) => node.y + 66)),
+      : Math.max(650, ...nodes.map((node) => node.y + 54)),
   };
 }
 

@@ -1,6 +1,6 @@
-import { useMemo } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import type { TreeNode } from "../types";
-import { layoutTree } from "../services/treeLayout";
+import { fitTreeZoom, layoutTree } from "../services/treeLayout";
 import { popularityPercentage, resultCount } from "../services/treeBuilder";
 import { gamesLabel, messages } from "../i18n";
 import type { Locale } from "../i18n";
@@ -11,14 +11,30 @@ type MoveTreeProps = {
   selectedId: string;
   collapsedIds: Set<string>;
   zoom: number;
+  fitToViewport: boolean;
+  fitRequest: number;
   locale: Locale;
   direction: TreeDirection;
+  onZoomChange: (zoom: number) => void;
   onSelect: (id: string) => void;
   onToggle: (id: string) => void;
 };
 
-export function MoveTree({ root, selectedId, collapsedIds, zoom, locale, direction, onSelect, onToggle }: MoveTreeProps) {
+export function MoveTree({
+  root,
+  selectedId,
+  collapsedIds,
+  zoom,
+  fitToViewport,
+  fitRequest,
+  locale,
+  direction,
+  onZoomChange,
+  onSelect,
+  onToggle,
+}: MoveTreeProps) {
   const text = messages[locale];
+  const viewportRef = useRef<HTMLDivElement>(null);
   const layout = useMemo(() => layoutTree(root, collapsedIds, direction), [root, collapsedIds, direction]);
   const selectedAncestors = useMemo(() => {
     const ids = new Set<string>();
@@ -30,8 +46,26 @@ export function MoveTree({ root, selectedId, collapsedIds, zoom, locale, directi
     return ids;
   }, [layout.nodes, selectedId]);
 
+  const fitTree = useCallback(() => {
+    const viewport = viewportRef.current;
+    if (!viewport) return;
+    onZoomChange(fitTreeZoom(layout.width, layout.height, viewport.clientWidth, viewport.clientHeight));
+    viewport.scrollTo({ left: 0, top: 0 });
+  }, [layout.height, layout.width, onZoomChange]);
+
+  useEffect(() => {
+    if (!fitToViewport) return;
+    const viewport = viewportRef.current;
+    if (!viewport) return;
+
+    fitTree();
+    const observer = new ResizeObserver(fitTree);
+    observer.observe(viewport);
+    return () => observer.disconnect();
+  }, [fitRequest, fitToViewport, fitTree]);
+
   return (
-    <div className="tree-viewport" data-orientation={direction}>
+    <div ref={viewportRef} className="tree-viewport" data-orientation={direction}>
       <div
         className="tree-canvas"
         style={{ width: layout.width * zoom, height: layout.height * zoom }}
@@ -47,8 +81,8 @@ export function MoveTree({ root, selectedId, collapsedIds, zoom, locale, directi
                   key={`${from.id}-${to.id}`}
                   className={`tree-line${active ? " selected" : ""}`}
                   d={direction === "right"
-                    ? `M ${from.x + 71} ${from.y} C ${midX} ${from.y}, ${midX} ${to.y}, ${to.x - 71} ${to.y}`
-                    : `M ${from.x} ${from.y + 33} C ${from.x} ${midY}, ${to.x} ${midY}, ${to.x} ${to.y - 33}`}
+                    ? `M ${from.x + 29} ${from.y} C ${midX} ${from.y}, ${midX} ${to.y}, ${to.x - 29} ${to.y}`
+                    : `M ${from.x} ${from.y + 29} C ${from.x} ${midY}, ${to.x} ${midY}, ${to.x} ${to.y - 29}`}
                 />
               );
             })}
@@ -56,9 +90,6 @@ export function MoveTree({ root, selectedId, collapsedIds, zoom, locale, directi
           {layout.nodes.map((node) => {
             const total = resultCount(node.results);
             const parentShare = popularityPercentage(node.results, node.parentCount);
-            const white = total ? (node.results.white / total) * 100 : 0;
-            const draw = total ? (node.results.draw / total) * 100 : 0;
-            const black = total ? Math.max(0, 100 - white - draw) : 0;
             const countLabel = total ? gamesLabel(locale, total) : "";
             return (
               <div key={node.id} className="tree-node-wrap" style={{ left: node.x, top: node.y }}>
@@ -69,23 +100,11 @@ export function MoveTree({ root, selectedId, collapsedIds, zoom, locale, directi
                   aria-label={`${node.id === "start" ? text.start : node.san}${countLabel ? `, ${countLabel}` : ""}`}
                 >
                   {node.id === "start" ? (
-                    <><strong>{text.start}</strong>{countLabel && <small>{countLabel}</small>}</>
+                    <strong>{text.start}</strong>
                   ) : (
                     <>
-                      <span className="node-top">
-                        <span className="node-san">{node.san}</span>
-                        {parentShare !== null && <span className="node-rate">{parentShare}%</span>}
-                      </span>
-                      {countLabel && (
-                        <span className="node-bottom">
-                          <span>{countLabel}</span>
-                          <span className="node-results" aria-hidden="true">
-                            <span style={{ width: `${white}%` }} />
-                            <span style={{ width: `${draw}%` }} />
-                            <span style={{ width: `${black}%` }} />
-                          </span>
-                        </span>
-                      )}
+                      <span className="node-san">{node.san}</span>
+                      {parentShare !== null && <span className="node-rate">{parentShare}%</span>}
                     </>
                   )}
                 </button>
