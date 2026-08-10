@@ -10,7 +10,7 @@
 - Collapse and expand branches; zoom and scroll large trees.
 - Display the move tree either from left to right or from top to bottom.
 - Import local `.pgn` files containing one or more games and `.json` Chess Tree Builder files.
-- Paste and validate a SAN line or complete PGN text before creating or extending a tree.
+- Paste and validate a SAN line or complete PGN text, preserving recursive variations as tree branches.
 - Download the complete tree as PGN variations, lossless Chess Tree Builder JSON or an SVG image.
 - Merge common move sequences and calculate move popularity.
 - Aggregate white wins, draws and black wins at every node.

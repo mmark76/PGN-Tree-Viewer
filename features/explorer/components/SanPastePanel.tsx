@@ -12,8 +12,8 @@ type SanPastePanelProps = {
   locale: Locale;
   selectedFen: string;
   selectedLabel: string;
-  onAdd: (moves: string[]) => void;
-  onReplace: (moves: string[]) => void;
+  onAdd: (lines: string[][]) => void;
+  onReplace: (lines: string[][]) => void;
   onClose: () => void;
 };
 
@@ -86,8 +86,8 @@ export function SanPastePanel({ locale, selectedFen, selectedLabel, onAdd, onRep
           )}
         </div>
         <div className="settings-footer san-footer">
-          <button className="button" type="button" disabled={!startResult?.valid} onClick={() => startResult?.valid && onReplace(startResult.moves)}>{text.newTree}</button>
-          <button className="button primary" type="button" disabled={!selectedResult?.valid} onClick={() => selectedResult?.valid && onAdd(selectedResult.moves)}>{text.addFromHere}</button>
+          <button className="button" type="button" disabled={!startResult?.valid} onClick={() => startResult?.valid && onReplace(startResult.lines)}>{text.newTree}</button>
+          <button className="button primary" type="button" disabled={!selectedResult?.valid} onClick={() => selectedResult?.valid && onAdd(selectedResult.lines)}>{text.addFromHere}</button>
         </div>
       </section>
     </div>
@@ -108,7 +108,7 @@ function ValidationSummary({ result, locale, label }: { result: SanValidationRes
   return (
     <div className="san-validation valid" role="status">
       <strong>✓ {label}</strong>
-      <span>{result.moves.length} {text.validSanMoves}</span>
+      <span>{result.moves.length} {text.validSanMoves} · {result.lines.length} {text.treeLines}</span>
       <small>{result.moves.join(" ")}</small>
     </div>
   );

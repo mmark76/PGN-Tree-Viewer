@@ -172,19 +172,27 @@ export function ExplorerShell() {
     return true;
   };
 
-  const addSanFromSelected = (sanMoves: string[]) => {
-    const moves = [...pathToNode(selected, index), ...sanMoves];
+  const addSanFromSelected = (sanLines: string[][]) => {
+    const prefix = pathToNode(selected, index);
     setLines((current) => [
       ...current,
-      { moves, opening: "__manual__", results: { white: 0, draw: 0, black: 0 } },
+      ...sanLines.map((moves) => ({
+        moves: [...prefix, ...moves],
+        opening: "__manual__",
+        results: { white: 0, draw: 0, black: 0 },
+      })),
     ]);
     setCollapsedIds(new Set());
     setSanOpen(false);
     setNotice(text.sanAdded);
   };
 
-  const replaceWithSan = (sanMoves: string[]) => {
-    setLines([{ moves: sanMoves, opening: "__manual__", results: { white: 0, draw: 0, black: 0 } }]);
+  const replaceWithSan = (sanLines: string[][]) => {
+    setLines(sanLines.map((moves) => ({
+      moves,
+      opening: "__manual__",
+      results: { white: 0, draw: 0, black: 0 },
+    })));
     setFileName("");
     setSelectedId("start");
     setCollapsedIds(new Set());
