@@ -15,7 +15,7 @@ export function ExplorerFooter({ locale }: { locale: Locale }) {
         <nav aria-label={text.footerNavigation}>
           <a href="https://markellosecosystem.com/">{text.ecosystem}</a>
         </nav>
-        <small>Chess Tree Builder · v0.2</small>
+        <small>{__BUILD_VERSION__}</small>
       </div>
     </footer>
   );

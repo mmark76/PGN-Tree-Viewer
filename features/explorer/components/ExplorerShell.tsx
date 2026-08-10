@@ -24,6 +24,7 @@ import { MoveTree } from "./MoveTree";
 import { PositionInspector } from "./PositionInspector";
 import { SettingsPanel } from "./SettingsPanel";
 import { DownloadPanel } from "./DownloadPanel";
+import { SanPastePanel } from "./SanPastePanel";
 import type { DownloadFormat } from "./DownloadPanel";
 
 export function ExplorerShell() {
@@ -42,6 +43,7 @@ export function ExplorerShell() {
   const [settings, setSettings] = useState<ExplorerSettings>({ ...DEFAULT_SETTINGS });
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [downloadOpen, setDownloadOpen] = useState(false);
+  const [sanOpen, setSanOpen] = useState(false);
   const selected = index.get(selectedId) ?? tree;
   const hasTree = tree.children.length > 0;
   const text = messages[locale];
@@ -111,7 +113,7 @@ export function ExplorerShell() {
     }
     if (format === "svg") {
       downloadTextFile(
-        serializeTreeToSvg(tree, locale, settings.accentColor),
+        serializeTreeToSvg(tree, locale, settings.accentColor, settings.treeDirection),
         `${baseName}.svg`,
         "image/svg+xml;charset=utf-8",
       );
@@ -170,6 +172,26 @@ export function ExplorerShell() {
     return true;
   };
 
+  const addSanFromSelected = (sanMoves: string[]) => {
+    const moves = [...pathToNode(selected, index), ...sanMoves];
+    setLines((current) => [
+      ...current,
+      { moves, opening: "__manual__", results: { white: 0, draw: 0, black: 0 } },
+    ]);
+    setCollapsedIds(new Set());
+    setSanOpen(false);
+    setNotice(text.sanAdded);
+  };
+
+  const replaceWithSan = (sanMoves: string[]) => {
+    setLines([{ moves: sanMoves, opening: "__manual__", results: { white: 0, draw: 0, black: 0 } }]);
+    setFileName("");
+    setSelectedId("start");
+    setCollapsedIds(new Set());
+    setSanOpen(false);
+    setNotice(text.sanTreeCreated);
+  };
+
   return (
     <div
       className="app-shell"
@@ -193,6 +215,7 @@ export function ExplorerShell() {
         downloadDisabled={!hasTree}
         onLocaleChange={changeLocale}
         onOpenDownload={() => setDownloadOpen(true)}
+        onOpenSan={() => setSanOpen(true)}
         onOpenSettings={() => setSettingsOpen(true)}
       />
       <main className="workspace">
@@ -221,7 +244,7 @@ export function ExplorerShell() {
           </div>
           {notice && <div className={`notice${notice === text.noValidMoves || notice === text.invalidTreeFile || notice === text.fileTooLarge || notice === text.readFailed ? " error" : ""}`} role="status">{notice}</div>}
           {hasTree ? (
-            <MoveTree root={tree} selectedId={selectedId} collapsedIds={collapsedIds} zoom={zoom} locale={locale} onSelect={setSelectedId} onToggle={toggleBranch} />
+            <MoveTree root={tree} selectedId={selectedId} collapsedIds={collapsedIds} zoom={zoom} locale={locale} direction={settings.treeDirection} onSelect={setSelectedId} onToggle={toggleBranch} />
           ) : (
             <div className="tree-empty" aria-label={text.emptyTreeArea} />
           )}
@@ -255,6 +278,16 @@ export function ExplorerShell() {
           locale={locale}
           onDownload={downloadTree}
           onClose={() => setDownloadOpen(false)}
+        />
+      )}
+      {sanOpen && (
+        <SanPastePanel
+          locale={locale}
+          selectedFen={selected.fen}
+          selectedLabel={selected.id === "start" ? text.initialPosition : selected.san}
+          onAdd={addSanFromSelected}
+          onReplace={replaceWithSan}
+          onClose={() => setSanOpen(false)}
         />
       )}
     </div>

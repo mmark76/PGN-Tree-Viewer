@@ -8,10 +8,11 @@ type ExplorerHeaderProps = {
   downloadDisabled: boolean;
   onLocaleChange: (locale: Locale) => void;
   onOpenDownload: () => void;
+  onOpenSan: () => void;
   onOpenSettings: () => void;
 };
 
-export function ExplorerHeader({ sourceLabel, importing, locale, downloadDisabled, onLocaleChange, onOpenDownload, onOpenSettings }: ExplorerHeaderProps) {
+export function ExplorerHeader({ sourceLabel, importing, locale, downloadDisabled, onLocaleChange, onOpenDownload, onOpenSan, onOpenSettings }: ExplorerHeaderProps) {
   const text = messages[locale];
 
   return (
@@ -33,6 +34,10 @@ export function ExplorerHeader({ sourceLabel, importing, locale, downloadDisable
           <button className="button settings-button" type="button" onClick={onOpenSettings}>
             <span aria-hidden="true">⚙</span>
             {text.settings}
+          </button>
+          <button className="button san-button" type="button" onClick={onOpenSan}>
+            <span aria-hidden="true">▣</span>
+            {text.pasteSan}
           </button>
           <button className="button download-button" type="button" disabled={downloadDisabled} onClick={onOpenDownload}>
             <span aria-hidden="true">↓</span>

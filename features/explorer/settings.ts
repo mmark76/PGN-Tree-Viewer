@@ -1,6 +1,7 @@
 export type TextSize = "small" | "standard" | "large";
 export type BoardSize = "compact" | "standard" | "large";
 export type FontChoice = "classic" | "modern" | "serif";
+export type TreeDirection = "right" | "down";
 
 export type ExplorerSettings = {
   accentColor: string;
@@ -9,6 +10,7 @@ export type ExplorerSettings = {
   textSize: TextSize;
   boardSize: BoardSize;
   font: FontChoice;
+  treeDirection: TreeDirection;
 };
 
 export const SETTINGS_STORAGE_KEY = "chesstree-settings-v1";
@@ -20,6 +22,7 @@ export const DEFAULT_SETTINGS: ExplorerSettings = {
   textSize: "standard",
   boardSize: "standard",
   font: "classic",
+  treeDirection: "right",
 };
 
 const isHexColor = (value: unknown): value is string =>
@@ -39,6 +42,9 @@ export function normalizeSettings(value: unknown): ExplorerSettings {
     textSize: isOneOf(candidate.textSize, ["small", "standard", "large"]) ? candidate.textSize : DEFAULT_SETTINGS.textSize,
     boardSize: isOneOf(candidate.boardSize, ["compact", "standard", "large"]) ? candidate.boardSize : DEFAULT_SETTINGS.boardSize,
     font: isOneOf(candidate.font, ["classic", "modern", "serif"]) ? candidate.font : DEFAULT_SETTINGS.font,
+    treeDirection: isOneOf(candidate.treeDirection, ["right", "down"])
+      ? candidate.treeDirection
+      : DEFAULT_SETTINGS.treeDirection,
   };
 }
 

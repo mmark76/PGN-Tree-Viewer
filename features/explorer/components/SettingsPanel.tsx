@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import type { BoardSize, ExplorerSettings, FontChoice, TextSize } from "../settings";
+import type { BoardSize, ExplorerSettings, FontChoice, TextSize, TreeDirection } from "../settings";
 import { DEFAULT_SETTINGS } from "../settings";
 import { messages } from "../i18n";
 import type { Locale } from "../i18n";
@@ -85,6 +85,19 @@ export function SettingsPanel({ locale, settings, onChange, onClose }: SettingsP
               onChange={(value) => update("font", value)}
             />
           </fieldset>
+
+          <fieldset className="settings-group">
+            <legend>{text.treeDirection}</legend>
+            <SettingChoices
+              label={text.treeDirection}
+              value={settings.treeDirection}
+              options={[
+                ["right", text.directionRight],
+                ["down", text.directionDown],
+              ]}
+              onChange={(value) => update("treeDirection", value)}
+            />
+          </fieldset>
         </div>
 
         <div className="settings-footer">
@@ -121,11 +134,11 @@ type SettingChoicesProps<Value extends string> = {
   onChange: (value: Value) => void;
 };
 
-function SettingChoices<Value extends TextSize | BoardSize | FontChoice>({ label, value, options, onChange }: SettingChoicesProps<Value>) {
+function SettingChoices<Value extends TextSize | BoardSize | FontChoice | TreeDirection>({ label, value, options, onChange }: SettingChoicesProps<Value>) {
   return (
     <div className="setting-row">
       <span>{label}</span>
-      <div className="setting-choices" role="group" aria-label={label}>
+      <div className="setting-choices" role="group" aria-label={label} style={{ gridTemplateColumns: `repeat(${options.length}, 1fr)` }}>
         {options.map(([option, optionLabel]) => (
           <button
             key={option}

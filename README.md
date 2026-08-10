@@ -9,6 +9,7 @@ PGN/JSON/SVG exports, and locally saved appearance settings.
 - empty initial workspace that creates a tree from board moves or PGN import
 - responsive chessboard with SVG pieces, coordinates, move highlighting, and rotation
 - interactive variation tree with collapse, expand, zoom, and scrolling
+- tree direction switch between rightward and downward layouts
 - board position synchronized with the selected move
 - legal board moves create nodes and alternative branches in the tree
 - local import of one or more PGN games or a complete Chess Tree Builder JSON file
