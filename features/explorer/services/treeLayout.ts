@@ -9,7 +9,7 @@ const marginY = 48;
 
 export const MIN_TREE_ZOOM = 0.02;
 export const MAX_TREE_ZOOM = 1.2;
-export const READABLE_TREE_ZOOM = 0.78;
+export const READABLE_TREE_ZOOM = 0.67;
 
 export function fitTreeZoom(
   treeWidth: number,

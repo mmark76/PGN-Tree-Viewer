@@ -247,7 +247,7 @@ test("lays out the move tree to the right or downward", () => {
 test("fits the complete tree inside the available viewport", () => {
   assert.equal(fitTreeZoom(2000, 1000, 1000, 600), 0.472);
   assert.equal(fitTreeZoom(400, 300, 1000, 700), 1);
-  assert.equal(smartFitTreeZoom(2000, 1000, 1000, 600), 0.78);
+  assert.equal(smartFitTreeZoom(2000, 1000, 1000, 600), 0.67);
   assert.equal(smartFitTreeZoom(400, 300, 1000, 700), 1);
 });
 

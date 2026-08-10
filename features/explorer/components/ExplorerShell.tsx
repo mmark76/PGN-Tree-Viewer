@@ -41,7 +41,7 @@ export function ExplorerShell() {
   const index = useMemo(() => indexTree(tree), [tree]);
   const [selectedId, setSelectedId] = useState("start");
   const [collapsedIds, setCollapsedIds] = useState<Set<string>>(new Set());
-  const [zoom, setZoom] = useState(0.82);
+  const [zoom, setZoom] = useState(0.67);
   const [treeViewMode, setTreeViewMode] = useState<TreeViewMode>("smart");
   const [fitRequest, setFitRequest] = useState(0);
   const [flipped, setFlipped] = useState(false);
