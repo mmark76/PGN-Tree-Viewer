@@ -162,7 +162,10 @@ test("creates safe download file names", () => {
 test("validates numbered SAN text and normalizes the moves", () => {
   const result = validateSanSequence("1. e4 e5 2. Nf3 Nc6 3. Bb5");
   assert.equal(result.valid, true);
-  if (result.valid) assert.deepEqual(result.moves, ["e4", "e5", "Nf3", "Nc6", "Bb5"]);
+  if (result.valid) {
+    assert.deepEqual(result.moves, ["e4", "e5", "Nf3", "Nc6", "Bb5"]);
+    assert.deepEqual(result.lines, [["e4", "e5", "Nf3", "Nc6", "Bb5"]]);
+  }
 });
 
 test("reports the first invalid SAN move", () => {
@@ -183,7 +186,7 @@ test("validates SAN from a selected position", () => {
   if (result.valid) assert.deepEqual(result.moves, ["c5", "Nf3"]);
 });
 
-test("extracts the main line from a complete pasted PGN", () => {
+test("extracts the main line and variations from a complete pasted PGN", () => {
   const pastedPgn = `[Event "English Reversed Dragon for White by GM"]
 [Site "?"]
 [Date "????.??.??"]
@@ -199,6 +202,32 @@ test("extracts the main line from a complete pasted PGN", () => {
   assert.equal(result.valid, true);
   if (result.valid) {
     assert.deepEqual(result.moves, ["Nf3", "d5", "g3", "c5", "Bg2", "Nc6", "O-O", "e5"]);
+    assert.deepEqual(result.lines, [
+      ["Nf3", "d5", "g3", "c5", "Bg2", "Nc6", "O-O", "e5"],
+      ["Nf3", "d5", "g3", "Nf6", "Bg2"],
+    ]);
+  }
+});
+
+test("preserves nested PGN variations as separate tree lines", () => {
+  const result = validateSanSequence("1. e4 e5 (1... c5 2. Nf3 (2. Nc3) d6) 2. Nf3 Nc6");
+
+  assert.equal(result.valid, true);
+  if (result.valid) {
+    assert.deepEqual(result.lines, [
+      ["e4", "e5", "Nf3", "Nc6"],
+      ["e4", "c5", "Nf3", "d6"],
+      ["e4", "c5", "Nc3"],
+    ]);
+    const tree = buildTree(result.lines.map((moves) => ({
+      moves,
+      opening: "__manual__",
+      results: { white: 0, draw: 0, black: 0 },
+    })));
+    const e4 = tree.children.find((node) => node.san === "e4")!;
+    assert.deepEqual(e4.children.map((node) => node.san), ["e5", "c5"]);
+    const c5 = e4.children.find((node) => node.san === "c5")!;
+    assert.deepEqual(c5.children.map((node) => node.san), ["Nf3", "Nc3"]);
   }
 });
 

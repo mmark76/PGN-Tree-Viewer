@@ -13,7 +13,7 @@ PGN/JSON/SVG exports, and locally saved appearance settings.
 - board position synchronized with the selected move
 - legal board moves create nodes and alternative branches in the tree
 - local import of one or more PGN games or a complete Chess Tree Builder JSON file
-- pasted SAN lines or complete PGN text with validation before insertion
+- pasted SAN lines or complete PGN text with recursive variations preserved as tree branches
 - download of the complete tree as PGN variations, lossless JSON, or an SVG image
 - automatic popularity and result percentages
 - responsive desktop and mobile layout
