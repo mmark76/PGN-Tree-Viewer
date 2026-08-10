@@ -28,6 +28,8 @@ import { DownloadPanel } from "./DownloadPanel";
 import { SanPastePanel } from "./SanPastePanel";
 import type { DownloadFormat } from "./DownloadPanel";
 
+export type TreeViewMode = "smart" | "overview" | "manual";
+
 export function ExplorerShell() {
   const [lines, setLines] = useState<LineRecord[]>([]);
   const [fileName, setFileName] = useState("");
@@ -40,7 +42,7 @@ export function ExplorerShell() {
   const [selectedId, setSelectedId] = useState("start");
   const [collapsedIds, setCollapsedIds] = useState<Set<string>>(new Set());
   const [zoom, setZoom] = useState(0.82);
-  const [fitToViewport, setFitToViewport] = useState(true);
+  const [treeViewMode, setTreeViewMode] = useState<TreeViewMode>("smart");
   const [fitRequest, setFitRequest] = useState(0);
   const [flipped, setFlipped] = useState(false);
   const [settings, setSettings] = useState<ExplorerSettings>({ ...DEFAULT_SETTINGS });
@@ -70,7 +72,7 @@ export function ExplorerShell() {
 
   const changeSettings = (nextSettings: ExplorerSettings) => {
     if (nextSettings.treeDirection !== settings.treeDirection) {
-      setFitToViewport(true);
+      setTreeViewMode("smart");
       setFitRequest((value) => value + 1);
     }
     setSettings(nextSettings);
@@ -78,12 +80,12 @@ export function ExplorerShell() {
   };
 
   const changeZoom = (step: number) => {
-    setFitToViewport(false);
+    setTreeViewMode("manual");
     setZoom((value) => Math.min(MAX_TREE_ZOOM, Math.max(MIN_TREE_ZOOM, value + step)));
   };
 
-  const fitTreeToViewport = () => {
-    setFitToViewport(true);
+  const changeTreeViewMode = (mode: Exclude<TreeViewMode, "manual">) => {
+    setTreeViewMode(mode);
     setFitRequest((value) => value + 1);
   };
 
@@ -114,7 +116,7 @@ export function ExplorerShell() {
       setFileName(file.name);
       setSelectedId("start");
       setCollapsedIds(new Set());
-      setFitToViewport(true);
+      setTreeViewMode("smart");
       setFitRequest((value) => value + 1);
     } catch (error) {
       setNotice(isJson ? text.invalidTreeFile : error instanceof Error ? error.message : text.readFailed);
@@ -216,7 +218,7 @@ export function ExplorerShell() {
     setSelectedId("start");
     setCollapsedIds(new Set());
     setSanOpen(false);
-    setFitToViewport(true);
+    setTreeViewMode("smart");
     setFitRequest((value) => value + 1);
     setNotice(text.sanTreeCreated);
   };
@@ -264,11 +266,21 @@ export function ExplorerShell() {
                 <span className="zoom-value">{Math.round(zoom * 100)}%</span>
                 <button className="icon-button" type="button" onClick={() => changeZoom(0.1)} aria-label={text.zoomIn}>+</button>
                 <button
-                  className={`icon-button${fitToViewport ? " active" : ""}`}
+                  className={`icon-button${treeViewMode === "smart" ? " active" : ""}`}
                   type="button"
-                  onClick={fitTreeToViewport}
+                  onClick={() => changeTreeViewMode("smart")}
+                  aria-label={text.smartTreeView}
+                  aria-pressed={treeViewMode === "smart"}
+                  title={text.smartTreeView}
+                >
+                  ◉
+                </button>
+                <button
+                  className={`icon-button${treeViewMode === "overview" ? " active" : ""}`}
+                  type="button"
+                  onClick={() => changeTreeViewMode("overview")}
                   aria-label={text.fitTree}
-                  aria-pressed={fitToViewport}
+                  aria-pressed={treeViewMode === "overview"}
                   title={text.fitTree}
                 >
                   ⛶
@@ -288,7 +300,7 @@ export function ExplorerShell() {
               selectedId={selectedId}
               collapsedIds={collapsedIds}
               zoom={zoom}
-              fitToViewport={fitToViewport}
+              viewMode={treeViewMode}
               fitRequest={fitRequest}
               locale={locale}
               direction={settings.treeDirection}

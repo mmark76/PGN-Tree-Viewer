@@ -9,6 +9,7 @@ const marginY = 48;
 
 export const MIN_TREE_ZOOM = 0.02;
 export const MAX_TREE_ZOOM = 1.2;
+export const READABLE_TREE_ZOOM = 0.78;
 
 export function fitTreeZoom(
   treeWidth: number,
@@ -23,6 +24,19 @@ export function fitTreeZoom(
   const availableHeight = Math.max(1, viewportHeight - padding * 2);
   const fitted = Math.min(1, availableWidth / treeWidth, availableHeight / treeHeight);
   return Math.max(MIN_TREE_ZOOM, Math.floor(fitted * 1000) / 1000);
+}
+
+export function smartFitTreeZoom(
+  treeWidth: number,
+  treeHeight: number,
+  viewportWidth: number,
+  viewportHeight: number,
+  padding = 28,
+) {
+  return Math.max(
+    READABLE_TREE_ZOOM,
+    fitTreeZoom(treeWidth, treeHeight, viewportWidth, viewportHeight, padding),
+  );
 }
 
 export function layoutTree(root: TreeNode, collapsedIds: Set<string>, direction: TreeDirection = "right") {
