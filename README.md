@@ -8,7 +8,7 @@ PGN/JSON/SVG exports, and locally saved appearance settings.
 
 - empty initial workspace that creates a tree from board moves or PGN import
 - responsive chessboard with SVG pieces, coordinates, move highlighting, and rotation
-- compact circular move nodes with short connectors, automatic fit-to-screen, manual zoom, collapse, expand, and scrolling
+- compact circular move nodes with short connectors, a readable smart view with a whole-tree navigator, optional fit-to-screen, manual zoom, collapse, expand, and scrolling
 - tree direction switch between rightward and downward layouts
 - board position synchronized with the selected move
 - legal board moves create nodes and alternative branches in the tree
