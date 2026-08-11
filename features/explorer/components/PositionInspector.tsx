@@ -82,7 +82,7 @@ export function PositionInspector({ node, path, hasData, locale, flipped, onFlip
             </div>
           ) : (
             <div className="position-empty manual-position">
-              <strong>{text.manualLine}</strong>
+              <strong>{opening === "__manual__" ? text.manualLine : opening}</strong>
               <span>{text.noStatistics}</span>
             </div>
           )}

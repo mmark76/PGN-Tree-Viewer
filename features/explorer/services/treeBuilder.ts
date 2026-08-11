@@ -184,19 +184,34 @@ function* validatePreparedMoves(
     throw new Error("Invalid prepared move sequence.");
   }
 
-  let expectedBeforeFen = startFen;
+  const chess = new Chess(startFen);
   for (const [index, move] of preparedLine.moves.entries()) {
+    let played: ReturnType<Chess["move"]>;
+    try {
+      played = chess.move(preparedLine.line.moves[index]);
+    } catch {
+      throw new Error("Invalid prepared move sequence.");
+    }
     if (
-      move.san !== preparedLine.line.moves[index]
-      || move.beforeFen !== expectedBeforeFen
-      || !move.afterFen
-      || !move.from
-      || !move.to
+      !played
+      || move.san !== preparedLine.line.moves[index]
+      || move.san !== played.san
+      || move.from !== played.from
+      || move.to !== played.to
+      || move.promotion !== played.promotion
+      || move.beforeFen !== played.before
+      || move.afterFen !== played.after
     ) {
       throw new Error("Invalid prepared move sequence.");
     }
-    expectedBeforeFen = move.afterFen;
-    yield move;
+    yield {
+      san: played.san,
+      from: played.from,
+      to: played.to,
+      promotion: played.promotion,
+      beforeFen: played.before,
+      afterFen: played.after,
+    };
   }
 }
 

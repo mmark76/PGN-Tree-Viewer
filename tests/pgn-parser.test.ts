@@ -544,7 +544,7 @@ test("counts repeated input plies even when games share the same tree nodes", ()
   );
 });
 
-test("budgets all encountered PGN games and supports no-replay prepared trees", () => {
+test("budgets all encountered PGN games and validates prepared trees", () => {
   const twoGames = `1. e4 1-0
 
 1. d4 0-1`;
