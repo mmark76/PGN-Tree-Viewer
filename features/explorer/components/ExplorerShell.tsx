@@ -3,23 +3,52 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ChangeEvent, CSSProperties } from "react";
 import { DEFAULT_POSITION } from "chess.js";
-import { DEFAULT_LOCALE, firstMovesLabel, gamesLabel, importSuccess, messages } from "../i18n";
+import {
+  DEFAULT_LOCALE,
+  firstMovesLabel,
+  gamesLabel,
+  importErrorMessage,
+  importProgressLabel,
+  importSuccess,
+  messages,
+} from "../i18n";
 import type { Locale } from "../i18n";
 import { buildTree, gameCount, indexTree, pathToNode } from "../services/treeBuilder";
-import { parsePgnCollection } from "../services/pgnParser";
 import { playBoardMove } from "../services/boardMove";
 import { MAX_TREE_ZOOM, MIN_TREE_ZOOM } from "../services/treeLayout";
 import {
   downloadBaseName,
   downloadTextFile,
-  parseChessTreeJson,
   serializeChessTreeJson,
   serializeTreeToPgn,
   serializeTreeToSvg,
 } from "../services/treeFiles";
+import {
+  assertFileSizeWithinLimit,
+  assertLineCollectionWithinLimits,
+  assertNodeCountWithinLimit,
+} from "../services/inputLimits";
+import {
+  importKindForFile,
+  normalizeImportError,
+  normalizeLineBuildError,
+} from "../services/importPipeline";
+import type {
+  ImportErrorDetails,
+  ImportPayload,
+  ImportProgress,
+  ImportWorkerResponse,
+  LineBuildPayload,
+} from "../services/importPipeline";
+import { createManualLine, upsertManualLine, upsertManualLines } from "../services/manualLines";
+import { appendManualMoveToTree } from "../services/manualTree";
+import {
+  isExplorerDataMutationLocked,
+} from "../services/explorerTaskLock";
+import type { ExplorerDataTask } from "../services/explorerTaskLock";
 import { DEFAULT_SETTINGS, readStoredSettings, storeSettings } from "../settings";
 import type { ExplorerSettings } from "../settings";
-import type { LineRecord } from "../types";
+import type { LineRecord, TreeNode } from "../types";
 import { ExplorerFooter } from "./ExplorerFooter";
 import { ExplorerHeader } from "./ExplorerHeader";
 import { MoveTree } from "./MoveTree";
@@ -31,14 +60,28 @@ import type { DownloadFormat } from "./DownloadPanel";
 
 export type TreeViewMode = "smart" | "overview" | "manual";
 
+type ExplorerData = {
+  lines: LineRecord[];
+  tree: TreeNode;
+};
+
 export function ExplorerShell() {
-  const [lines, setLines] = useState<LineRecord[]>([]);
+  const [data, setData] = useState<ExplorerData>(() => ({ lines: [], tree: buildTree([]) }));
+  const { lines, tree } = data;
   const [fileName, setFileName] = useState("");
   const [importing, setImporting] = useState(false);
+  const [importProgress, setImportProgress] = useState<ImportProgress>({
+    percent: 0,
+    stage: "reading",
+  });
   const [notice, setNotice] = useState("");
+  const [noticeIsError, setNoticeIsError] = useState(false);
   const [locale, setLocale] = useState<Locale>(DEFAULT_LOCALE);
+  const localeRef = useRef(locale);
   const fileInput = useRef<HTMLInputElement>(null);
-  const tree = useMemo(() => buildTree(lines), [lines]);
+  const workerRef = useRef<Worker | null>(null);
+  const workerTaskRef = useRef<ExplorerDataTask | null>(null);
+  const importRequestId = useRef(0);
   const index = useMemo(() => indexTree(tree), [tree]);
   const [selectedId, setSelectedId] = useState("start");
   const [collapsedIds, setCollapsedIds] = useState<Set<string>>(new Set());
@@ -50,6 +93,7 @@ export function ExplorerShell() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [downloadOpen, setDownloadOpen] = useState(false);
   const [sanOpen, setSanOpen] = useState(false);
+  const [manualBuildError, setManualBuildError] = useState("");
   const selected = index.get(selectedId) ?? tree;
   const hasTree = tree.children.length > 0;
   const text = messages[locale];
@@ -57,21 +101,33 @@ export function ExplorerShell() {
     "--forest": settings.accentColor,
     "--forest-2": settings.accentColor,
   } as CSSProperties;
+  const dataMutationLocked = importing;
 
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => setSettings(readStoredSettings()));
     return () => window.cancelAnimationFrame(frame);
   }, []);
 
-  const openFilePicker = () => fileInput.current?.click();
+  useEffect(() => () => workerRef.current?.terminate(), []);
+
+  useEffect(() => {
+    localeRef.current = locale;
+  }, [locale]);
+
+  const openFilePicker = () => {
+    if (isExplorerDataMutationLocked(importing, workerTaskRef.current)) return;
+    fileInput.current?.click();
+  };
 
   const changeLocale = (nextLocale: Locale) => {
     setLocale(nextLocale);
     document.documentElement.lang = nextLocale;
     setNotice("");
+    setNoticeIsError(false);
   };
 
   const changeSettings = (nextSettings: ExplorerSettings) => {
+    if (isExplorerDataMutationLocked(importing, workerTaskRef.current)) return;
     if (nextSettings.treeDirection !== settings.treeDirection) {
       setTreeViewMode("smart");
       setFitRequest((value) => value + 1);
@@ -90,48 +146,110 @@ export function ExplorerShell() {
     setFitRequest((value) => value + 1);
   };
 
-  const importFile = async (event: ChangeEvent<HTMLInputElement>) => {
+  const importFile = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
-    if (file.size > 8 * 1024 * 1024) {
-      setNotice(text.fileTooLarge);
+    if (isExplorerDataMutationLocked(importing, workerTaskRef.current)) {
       event.target.value = "";
       return;
     }
+    const kind = importKindForFile(file);
+    try {
+      assertFileSizeWithinLimit(file.size);
+    } catch (error) {
+      const normalized = normalizeImportError(error, kind);
+      setNotice(importErrorMessage(locale, normalized));
+      setNoticeIsError(true);
+      event.target.value = "";
+      return;
+    }
+
+    workerRef.current?.terminate();
+    workerTaskRef.current = "file";
+    const requestId = importRequestId.current + 1;
+    importRequestId.current = requestId;
     setImporting(true);
     setNotice("");
-    const isJson = file.name.toLowerCase().endsWith(".json") || file.type === "application/json";
-    try {
-      const content = await file.text();
-      if (isJson) {
-        const parsed = parseChessTreeJson(content);
-        setLines(parsed.lines);
-        changeSettings(parsed.settings);
-        setNotice(text.treeImported);
-      } else {
-        const parsed = parsePgnCollection(content);
-        if (!parsed.lines.length) throw new Error(text.noValidMoves);
-        setLines(parsed.lines);
-        setNotice(importSuccess(locale, parsed.gameCount, parsed.skippedCount));
+    setNoticeIsError(false);
+    setManualBuildError("");
+    setSettingsOpen(false);
+    setImportProgress({ percent: 0, stage: "reading" });
+    event.target.value = "";
+
+    const finishSuccess = (payload: ImportPayload) => {
+      if (requestId !== importRequestId.current) return;
+      workerRef.current?.terminate();
+      workerRef.current = null;
+      workerTaskRef.current = null;
+      setData({ lines: payload.lines, tree: payload.tree });
+      if (payload.settings) {
+        setSettings(payload.settings);
+        storeSettings(payload.settings);
       }
+      setNotice(
+        payload.kind === "json"
+          ? messages[localeRef.current].treeImported
+          : importSuccess(localeRef.current, payload.gameCount, payload.skippedCount),
+      );
+      setNoticeIsError(false);
       setFileName(file.name);
       setSelectedId("start");
       setCollapsedIds(new Set());
       setTreeViewMode("smart");
       setFitRequest((value) => value + 1);
-    } catch (error) {
-      const code = error && typeof error === "object" && "code" in error
-        ? String(error.code)
-        : "";
-      if (code === "invalid-start-fen") setNotice(text.invalidFen);
-      else if (code === "mixed-start-fen") setNotice(text.mixedStartPositions);
-      else if (code === "invalid-results") setNotice(text.invalidResults);
-      else if (code === "unsafe-integer") setNotice(text.unsafeTotals);
-      else setNotice(isJson ? text.invalidTreeFile : error instanceof Error ? error.message : text.readFailed);
-    } finally {
       setImporting(false);
-      event.target.value = "";
+    };
+
+    const finishError = (error: ImportErrorDetails) => {
+      if (requestId !== importRequestId.current) return;
+      workerRef.current?.terminate();
+      workerRef.current = null;
+      workerTaskRef.current = null;
+      setNotice(importErrorMessage(localeRef.current, error));
+      setNoticeIsError(true);
+      setImporting(false);
+    };
+
+    if (typeof Worker === "undefined") {
+      finishError({ code: "worker-unavailable" });
+      return;
     }
+
+    try {
+      const worker = new Worker(new URL("../workers/importWorker.ts", import.meta.url), {
+        type: "module",
+      });
+      workerRef.current = worker;
+      worker.onmessage = ({ data: response }: MessageEvent<ImportWorkerResponse>) => {
+        if (response.requestId !== importRequestId.current) return;
+        if (response.type === "progress") {
+          setImportProgress((current) => response.progress.percent >= current.percent
+            ? response.progress
+            : current);
+        } else if (response.type === "success") {
+          finishSuccess(response.payload);
+        } else if (response.type === "error") {
+          finishError(response.error);
+        }
+      };
+      worker.onerror = () => finishError({ code: "worker-unavailable" });
+      worker.postMessage({ type: "import", requestId, kind, file });
+    } catch {
+      finishError({ code: "worker-unavailable" });
+    }
+  };
+
+  const cancelImport = () => {
+    const cancelledTask = workerTaskRef.current;
+    importRequestId.current += 1;
+    workerRef.current?.terminate();
+    workerRef.current = null;
+    workerTaskRef.current = null;
+    setImporting(false);
+    setImportProgress({ percent: 0, stage: "reading" });
+    setNotice(text.importCancelled);
+    setNoticeIsError(false);
+    if (cancelledTask === "tree") setManualBuildError(text.importCancelled);
   };
 
   const downloadTree = (format: DownloadFormat) => {
@@ -164,7 +282,78 @@ export function ExplorerShell() {
     });
   };
 
+  const buildManualLines = (
+    nextLines: LineRecord[],
+    successMessage: string,
+    onSuccess: () => void,
+  ) => {
+    if (isExplorerDataMutationLocked(importing, workerTaskRef.current)) return;
+    workerRef.current?.terminate();
+    workerTaskRef.current = "tree";
+    const requestId = importRequestId.current + 1;
+    importRequestId.current = requestId;
+    setImporting(true);
+    setImportProgress({ percent: 0, stage: "building" });
+    setManualBuildError("");
+    setNotice("");
+    setNoticeIsError(false);
+
+    const finishSuccess = (payload: LineBuildPayload) => {
+      if (requestId !== importRequestId.current) return;
+      workerRef.current?.terminate();
+      workerRef.current = null;
+      workerTaskRef.current = null;
+      setData({ lines: payload.lines, tree: payload.tree });
+      setImporting(false);
+      setManualBuildError("");
+      setNotice(successMessage);
+      setNoticeIsError(false);
+      onSuccess();
+    };
+
+    const finishError = (error: ImportErrorDetails) => {
+      if (requestId !== importRequestId.current) return;
+      workerRef.current?.terminate();
+      workerRef.current = null;
+      workerTaskRef.current = null;
+      const message = importErrorMessage(localeRef.current, error);
+      setImporting(false);
+      setManualBuildError(message);
+      setNotice(message);
+      setNoticeIsError(true);
+    };
+
+    if (typeof Worker === "undefined") {
+      finishError({ code: "worker-unavailable" });
+      return;
+    }
+
+    try {
+      const worker = new Worker(new URL("../workers/importWorker.ts", import.meta.url), {
+        type: "module",
+      });
+      workerRef.current = worker;
+      worker.onmessage = ({ data: response }: MessageEvent<ImportWorkerResponse>) => {
+        if (response.requestId !== importRequestId.current) return;
+        if (response.type === "progress") {
+          setImportProgress((current) => response.progress.percent >= current.percent
+            ? response.progress
+            : current);
+        } else if (response.type === "build-success") {
+          finishSuccess(response.payload);
+        } else if (response.type === "error") {
+          finishError(response.error);
+        }
+      };
+      worker.onerror = () => finishError({ code: "worker-unavailable" });
+      worker.postMessage({ type: "build-tree", requestId, lines: nextLines });
+    } catch {
+      finishError({ code: "worker-unavailable" });
+    }
+  };
+
   const addMoveFromBoard = (from: string, to: string) => {
+    if (isExplorerDataMutationLocked(importing, workerTaskRef.current)) return false;
     const played = playBoardMove(selected.fen, from, to);
     if (!played) return false;
 
@@ -182,15 +371,20 @@ export function ExplorerShell() {
 
     const moves = [...pathToNode(selected, index), played.san];
     const moveKey = `${played.from}${played.to}${played.promotion ?? ""}`;
-    setLines((current) => [
-      ...current,
-      {
-        moves,
-        opening: "__manual__",
-        results: { white: 0, draw: 0, black: 0, unknown: 0 },
-        startFen: tree.fen,
-      },
-    ]);
+    const nextLines = upsertManualLine(lines, moves, tree.fen);
+    try {
+      assertLineCollectionWithinLimits(nextLines);
+      assertNodeCountWithinLimit(index.size + 1);
+      const nextTree = appendManualMoveToTree(tree, selected.id, played);
+      setData({ lines: nextLines, tree: nextTree });
+      setNotice(text.moveAdded);
+      setNoticeIsError(false);
+    } catch (error) {
+      const normalized = normalizeLineBuildError(error);
+      setNotice(importErrorMessage(locale, normalized));
+      setNoticeIsError(true);
+      return false;
+    }
     setSelectedId(`${selected.id}-${moveKey}`);
     setCollapsedIds((current) => {
       if (!current.has(selected.id)) return current;
@@ -198,40 +392,34 @@ export function ExplorerShell() {
       next.delete(selected.id);
       return next;
     });
-    setNotice(text.moveAdded);
     return true;
   };
 
   const addSanFromSelected = (sanLines: string[][]) => {
+    if (isExplorerDataMutationLocked(importing, workerTaskRef.current)) return;
     const prefix = pathToNode(selected, index);
-    setLines((current) => [
-      ...current,
-      ...sanLines.map((moves) => ({
-        moves: [...prefix, ...moves],
-        opening: "__manual__",
-        results: { white: 0, draw: 0, black: 0, unknown: 0 },
-        startFen: tree.fen,
-      })),
-    ]);
-    setCollapsedIds(new Set());
-    setSanOpen(false);
-    setNotice(text.sanAdded);
+    const nextLines = upsertManualLines(
+      lines,
+      sanLines.map((moves) => [...prefix, ...moves]),
+      tree.fen,
+    );
+    void buildManualLines(nextLines, text.sanAdded, () => {
+      setCollapsedIds(new Set());
+      setSanOpen(false);
+    });
   };
 
   const replaceWithSan = (sanLines: string[][], startFen: string) => {
-    setLines(sanLines.map((moves) => ({
-      moves,
-      opening: "__manual__",
-      results: { white: 0, draw: 0, black: 0, unknown: 0 },
-      startFen,
-    })));
-    setFileName("");
-    setSelectedId("start");
-    setCollapsedIds(new Set());
-    setSanOpen(false);
-    setTreeViewMode("smart");
-    setFitRequest((value) => value + 1);
-    setNotice(text.sanTreeCreated);
+    if (isExplorerDataMutationLocked(importing, workerTaskRef.current)) return;
+    const nextLines = sanLines.map((moves) => createManualLine(moves, startFen));
+    void buildManualLines(nextLines, text.sanTreeCreated, () => {
+      setFileName("");
+      setSelectedId("start");
+      setCollapsedIds(new Set());
+      setSanOpen(false);
+      setTreeViewMode("smart");
+      setFitRequest((value) => value + 1);
+    });
   };
 
   return (
@@ -248,16 +436,23 @@ export function ExplorerShell() {
         className="file-input"
         type="file"
         accept=".pgn,.json,text/plain,application/json"
+        disabled={importing}
         onChange={importFile}
       />
       <ExplorerHeader
         sourceLabel={fileName || text.noPgnSource}
         importing={importing}
+        importProgress={importProgress.percent}
+        importProgressLabel={importProgressLabel(locale, importProgress.stage, importProgress.percent)}
         locale={locale}
         downloadDisabled={!hasTree}
         onLocaleChange={changeLocale}
+        onCancelImport={cancelImport}
         onOpenDownload={() => setDownloadOpen(true)}
-        onOpenSan={() => setSanOpen(true)}
+        onOpenSan={() => {
+          setManualBuildError("");
+          setSanOpen(true);
+        }}
         onOpenSettings={() => setSettingsOpen(true)}
       />
       <main className="workspace">
@@ -304,16 +499,11 @@ export function ExplorerShell() {
               </button>
             )}
           </div>
-          {notice && <div className={`notice${new Set<string>([
-            text.noValidMoves,
-            text.invalidTreeFile,
-            text.fileTooLarge,
-            text.readFailed,
-            text.invalidFen,
-            text.mixedStartPositions,
-            text.invalidResults,
-            text.unsafeTotals,
-          ]).has(notice) ? " error" : ""}`} role="status">{notice}</div>}
+          {notice && (
+            <div className={`notice${noticeIsError ? " error" : ""}`} role="status">
+              {notice}
+            </div>
+          )}
           {hasTree ? (
             <MoveTree
               root={tree}
@@ -345,6 +535,7 @@ export function ExplorerShell() {
           lightSquareColor={settings.lightSquareColor}
           darkSquareColor={settings.darkSquareColor}
           sourceNote={hasTree ? (fileName ? `${fileName} · ${gamesLabel(locale, gameCount(tree.results))}` : "") : text.waitingForPgn}
+          editingDisabled={dataMutationLocked}
         />
       </main>
       <ExplorerFooter locale={locale} />
@@ -369,9 +560,16 @@ export function ExplorerShell() {
           selectedFen={selected.fen}
           selectedLabel={selected.id === "start" ? text.initialPosition : selected.san}
           selectedIsStandardRoot={selected.id === "start" && tree.fen === DEFAULT_POSITION}
+          building={dataMutationLocked}
+          buildProgress={importProgress}
+          buildError={manualBuildError}
           onAdd={addSanFromSelected}
           onReplace={replaceWithSan}
-          onClose={() => setSanOpen(false)}
+          onCancelBuild={cancelImport}
+          onClose={() => {
+            if (workerTaskRef.current === "tree") cancelImport();
+            setSanOpen(false);
+          }}
         />
       )}
     </div>

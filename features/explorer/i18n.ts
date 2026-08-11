@@ -31,6 +31,8 @@ export const messages = {
     resetSettings: "Επαναφορά",
     done: "Έτοιμο",
     reading: "Ανάγνωση…",
+    cancelImport: "Ακύρωση εισαγωγής",
+    importCancelled: "Η εισαγωγή ακυρώθηκε.",
     importPgn: "Εισαγωγή PGN / JSON",
     pasteSan: "Επικόλληση SAN / PGN",
     pasteSanDescription: "Επικολλήστε κινήσεις SAN ή ολόκληρο PGN, ελέγξτε το και επιλέξτε πού θα προστεθεί.",
@@ -38,6 +40,9 @@ export const messages = {
     sanMoves: "Κινήσεις SAN ή πλήρες PGN",
     pasteClipboard: "Επικόλληση από πρόχειρο",
     checkSan: "Έλεγχος",
+    cancelValidation: "Ακύρωση ελέγχου",
+    validationCancelled: "Ο έλεγχος SAN ακυρώθηκε.",
+    sanValidationFailed: "Ο έλεγχος SAN δεν μπόρεσε να ολοκληρωθεί. Δοκιμάστε ξανά.",
     clipboardFailed: "Δεν επιτράπηκε η ανάγνωση του πρόχειρου. Επικολλήστε με Ctrl+V στο πεδίο.",
     newTree: "Νέο δέντρο",
     addFromHere: "Προσθήκη από εδώ",
@@ -82,6 +87,7 @@ export const messages = {
     unsafePosition: "Η επικολλημένη γραμμή υπερβαίνει το ασφαλές εύρος αρίθμησης κινήσεων αυτού του FEN.",
     treeImported: "Το δέντρο Chess Tree Builder εισήχθη επιτυχώς.",
     readFailed: "Το αρχείο δεν μπόρεσε να διαβαστεί.",
+    workerUnavailable: "Το πρόγραμμα περιήγησης δεν μπόρεσε να ξεκινήσει επεξεργασία στο παρασκήνιο. Δοκιμάστε ξανά ή χρησιμοποιήστε άλλο σύγχρονο πρόγραμμα περιήγησης.",
     emptyTreeArea: "Κενή περιοχή δέντρου κινήσεων",
     waitingForPgn: "Έτοιμο για χειροκίνητη γραμμή ή εισαγωγή αρχείου",
     start: "Αρχή",
@@ -134,6 +140,8 @@ export const messages = {
     resetSettings: "Reset",
     done: "Done",
     reading: "Reading…",
+    cancelImport: "Cancel import",
+    importCancelled: "Import cancelled.",
     importPgn: "Import PGN / JSON",
     pasteSan: "Paste SAN / PGN",
     pasteSanDescription: "Paste SAN moves or a complete PGN, validate it, and choose where to add it.",
@@ -141,6 +149,9 @@ export const messages = {
     sanMoves: "SAN moves or complete PGN",
     pasteClipboard: "Paste from clipboard",
     checkSan: "Validate",
+    cancelValidation: "Cancel validation",
+    validationCancelled: "SAN validation cancelled.",
+    sanValidationFailed: "SAN validation could not be completed. Please try again.",
     clipboardFailed: "Clipboard access was not allowed. Paste into the field with Ctrl+V.",
     newTree: "New tree",
     addFromHere: "Add from here",
@@ -185,6 +196,7 @@ export const messages = {
     unsafePosition: "The pasted line exceeds the safe move-number range for this FEN.",
     treeImported: "The Chess Tree Builder file was imported successfully.",
     readFailed: "The file could not be read.",
+    workerUnavailable: "The browser could not start background processing. Try again or use another modern browser.",
     emptyTreeArea: "Empty move-tree area",
     waitingForPgn: "Ready for a manual line or file import",
     start: "Start",
@@ -235,4 +247,75 @@ export function importSuccess(locale: Locale, gameCount: number, skippedCount: n
     return `${gamesLabel(locale, gameCount)} ${imported}${skippedCount ? ` · ${skippedCount} ${skipped}` : ""}.`;
   }
   return `${gamesLabel(locale, gameCount)} imported${skippedCount ? ` · ${skippedCount} skipped` : ""}.`;
+}
+
+export function importProgressLabel(
+  locale: Locale,
+  stage: "reading" | "parsing" | "building" | "validating",
+  percent: number,
+) {
+  const labels = locale === "el"
+    ? { reading: "Ανάγνωση", parsing: "Ανάλυση", building: "Δημιουργία δέντρου", validating: "Έλεγχος SAN" }
+    : { reading: "Reading", parsing: "Parsing", building: "Building tree", validating: "Validating SAN" };
+  return `${labels[stage]} ${percent}%`;
+}
+
+export function importErrorMessage(
+  locale: Locale,
+  error: { code: string; limit?: number; actual?: number },
+) {
+  const text = messages[locale];
+  const limit = formatLimit(locale, error.limit);
+
+  switch (error.code) {
+    case "no-valid-moves": return text.noValidMoves;
+    case "invalid-tree-file": return text.invalidTreeFile;
+    case "invalid-start-fen": return text.invalidFen;
+    case "mixed-start-fen": return text.mixedStartPositions;
+    case "invalid-results": return text.invalidResults;
+    case "unsafe-integer": return text.unsafeTotals;
+    case "invalid-lines":
+      return locale === "el" ? "Το δέντρο δεν μπόρεσε να ενημερωθεί από αυτές τις κινήσεις." : "The tree could not be updated from these moves.";
+    case "read-failed": return text.readFailed;
+    case "worker-unavailable": return text.workerUnavailable;
+    case "file-size":
+      return locale === "el"
+        ? `Το αρχείο υπερβαίνει το όριο των ${formatBytes(error.limit)}.`
+        : `The file exceeds the ${formatBytes(error.limit)} limit.`;
+    case "game-count":
+      return locale === "el" ? `Το PGN υπερβαίνει το όριο των ${limit} παρτίδων.` : `The PGN exceeds the ${limit}-game limit.`;
+    case "line-count":
+      return locale === "el" ? `Η εισαγωγή υπερβαίνει το όριο των ${limit} γραμμών.` : `The input exceeds the ${limit}-line limit.`;
+    case "total-plies":
+      return locale === "el" ? `Η εισαγωγή υπερβαίνει το συνολικό όριο των ${limit} ημικινήσεων.` : `The input exceeds the ${limit}-ply total limit.`;
+    case "depth":
+      return locale === "el" ? `Μια γραμμή υπερβαίνει το μέγιστο βάθος των ${limit} ημικινήσεων.` : `A line exceeds the maximum depth of ${limit} plies.`;
+    case "node-count":
+      return locale === "el" ? `Το δέντρο υπερβαίνει το όριο των ${limit} κόμβων.` : `The tree exceeds the ${limit}-node limit.`;
+    case "pgn-block-size":
+      return locale === "el" ? `Μια παρτίδα PGN υπερβαίνει το όριο των ${formatBytes(error.limit)}.` : `A PGN game exceeds the ${formatBytes(error.limit)} limit.`;
+    case "san-length":
+      return locale === "el" ? `Το επικολλημένο κείμενο υπερβαίνει το όριο των ${limit} χαρακτήρων.` : `The pasted text exceeds the ${limit}-character limit.`;
+    case "san-token-count":
+      return locale === "el" ? `Το επικολλημένο κείμενο υπερβαίνει το όριο των ${limit} tokens.` : `The pasted text exceeds the ${limit}-token limit.`;
+    case "san-output-lines":
+      return locale === "el" ? `Οι παραλλαγές υπερβαίνουν το όριο των ${limit} γραμμών.` : `The variations exceed the ${limit}-line limit.`;
+    case "san-output-plies":
+      return locale === "el" ? `Οι παραλλαγές υπερβαίνουν το όριο των ${limit} ημικινήσεων.` : `The variations exceed the ${limit}-ply limit.`;
+    case "san-nesting":
+      return locale === "el" ? `Οι παραλλαγές υπερβαίνουν το μέγιστο βάθος ένθεσης ${limit}.` : `The variations exceed the maximum nesting depth of ${limit}.`;
+    default: return text.readFailed;
+  }
+}
+
+function formatLimit(locale: Locale, value?: number) {
+  return typeof value === "number"
+    ? new Intl.NumberFormat(locale === "el" ? "el-GR" : "en-US").format(value)
+    : locale === "el" ? "επιτρεπόμενο" : "allowed";
+}
+
+function formatBytes(value?: number) {
+  if (typeof value !== "number") return "8 MB";
+  if (value >= 1024 * 1024) return `${Math.round((value / (1024 * 1024)) * 10) / 10} MB`;
+  return `${Math.ceil(value / 1024)} KB`;
 }

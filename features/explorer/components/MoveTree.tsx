@@ -3,6 +3,7 @@ import type { MouseEvent as ReactMouseEvent } from "react";
 import type { TreeNode } from "../types";
 import { fitTreeZoom, layoutTree, smartFitTreeZoom } from "../services/treeLayout";
 import { popularityPercentage, resultCount } from "../services/treeBuilder";
+import { createAnimationFrameScheduler } from "../services/viewportScheduler";
 import { gamesLabel, messages } from "../i18n";
 import type { Locale } from "../i18n";
 import type { TreeDirection } from "../settings";
@@ -36,17 +37,23 @@ export function MoveTree({
 }: MoveTreeProps) {
   const text = messages[locale];
   const viewportRef = useRef<HTMLDivElement>(null);
-  const [viewportWindow, setViewportWindow] = useState({ x: 0, y: 0, width: 0, height: 0 });
+  const navigatorWindowRef = useRef<SVGRectElement>(null);
+  const navigatorVisibilityRef = useRef(false);
+  const [showNavigator, setShowNavigator] = useState(false);
   const layout = useMemo(() => layoutTree(root, collapsedIds, direction), [root, collapsedIds, direction]);
+  const positionedNodes = useMemo(
+    () => new Map(layout.nodes.map((node) => [node.id, node])),
+    [layout.nodes],
+  );
   const selectedAncestors = useMemo(() => {
     const ids = new Set<string>();
-    let current = layout.nodes.find((node) => node.id === selectedId);
+    let current = positionedNodes.get(selectedId);
     while (current) {
       ids.add(current.id);
-      current = current.parentId ? layout.nodes.find((node) => node.id === current?.parentId) : undefined;
+      current = current.parentId ? positionedNodes.get(current.parentId) : undefined;
     }
     return ids;
-  }, [layout.nodes, selectedId]);
+  }, [positionedNodes, selectedId]);
 
   const fitTree = useCallback(() => {
     const viewport = viewportRef.current;
@@ -69,30 +76,48 @@ export function MoveTree({
     return () => observer.disconnect();
   }, [fitRequest, fitTree, viewMode]);
 
-  const updateViewportWindow = useCallback(() => {
-    const viewport = viewportRef.current;
-    if (!viewport) return;
-    setViewportWindow({
-      x: viewport.scrollLeft / zoom,
-      y: viewport.scrollTop / zoom,
-      width: viewport.clientWidth / zoom,
-      height: viewport.clientHeight / zoom,
-    });
-  }, [zoom]);
-
   useEffect(() => {
     const viewport = viewportRef.current;
     if (!viewport) return;
 
-    updateViewportWindow();
-    viewport.addEventListener("scroll", updateViewportWindow, { passive: true });
-    const observer = new ResizeObserver(updateViewportWindow);
+    const updateNavigatorWindow = () => {
+      const safeZoom = zoom > 0 ? zoom : 1;
+      const width = viewport.clientWidth / safeZoom;
+      const height = viewport.clientHeight / safeZoom;
+      const nextShowNavigator = width > 0 && (
+        width < layout.width - 1 || height < layout.height - 1
+      );
+
+      if (navigatorVisibilityRef.current !== nextShowNavigator) {
+        navigatorVisibilityRef.current = nextShowNavigator;
+        setShowNavigator(nextShowNavigator);
+      }
+
+      const navigatorWindow = navigatorWindowRef.current;
+      if (!navigatorWindow) return;
+      navigatorWindow.setAttribute("x", String(Math.max(0, viewport.scrollLeft / safeZoom)));
+      navigatorWindow.setAttribute("y", String(Math.max(0, viewport.scrollTop / safeZoom)));
+      navigatorWindow.setAttribute("width", String(Math.min(layout.width, width)));
+      navigatorWindow.setAttribute("height", String(Math.min(layout.height, height)));
+    };
+    const view = viewport.ownerDocument.defaultView;
+    if (!view) return;
+    const scheduler = createAnimationFrameScheduler(
+      updateNavigatorWindow,
+      view.requestAnimationFrame.bind(view),
+      view.cancelAnimationFrame.bind(view),
+    );
+
+    scheduler.schedule();
+    viewport.addEventListener("scroll", scheduler.schedule, { passive: true });
+    const observer = new ResizeObserver(scheduler.schedule);
     observer.observe(viewport);
     return () => {
-      viewport.removeEventListener("scroll", updateViewportWindow);
+      viewport.removeEventListener("scroll", scheduler.schedule);
       observer.disconnect();
+      scheduler.cancel();
     };
-  }, [layout.height, layout.width, updateViewportWindow]);
+  }, [layout.height, layout.width, zoom]);
 
   const navigateFromOverview = (event: ReactMouseEvent<SVGSVGElement>) => {
     const viewport = viewportRef.current;
@@ -108,11 +133,23 @@ export function MoveTree({
     });
   };
 
-  const showNavigator = viewportWindow.width > 0 && (
-    viewportWindow.width < layout.width - 1 || viewportWindow.height < layout.height - 1
-  );
   const navigatorNodeRadius = Math.max(5, Math.min(12, Math.min(layout.width, layout.height) / 70));
-  const selectedNode = layout.nodes.find((node) => node.id === selectedId);
+  const selectedNode = positionedNodes.get(selectedId);
+  const navigatorGraph = useMemo(() => (
+    <>
+      {layout.edges.map(({ from, to }) => (
+        <line key={`${from.id}-${to.id}`} x1={from.x} y1={from.y} x2={to.x} y2={to.y} />
+      ))}
+      {layout.nodes.map((node) => (
+        <circle
+          key={node.id}
+          cx={node.x}
+          cy={node.y}
+          r={navigatorNodeRadius}
+        />
+      ))}
+    </>
+  ), [layout.edges, layout.nodes, navigatorNodeRadius]);
 
   return (
     <div className="tree-viewport-shell">
@@ -175,49 +212,45 @@ export function MoveTree({
           </div>
         </div>
       </div>
-      {showNavigator && (
-        <div className="tree-navigator" role="group" aria-label={text.treeNavigator}>
-          <div className="tree-navigator-label">
-            <strong>{text.treeNavigator}</strong>
-            <span>{text.treeNavigatorHint}</span>
-          </div>
-          <svg
-            viewBox={`0 0 ${layout.width} ${layout.height}`}
-            preserveAspectRatio="none"
-            role="img"
-            aria-label={text.treeNavigator}
-            onClick={navigateFromOverview}
-          >
-            {layout.edges.map(({ from, to }) => (
-              <line key={`${from.id}-${to.id}`} x1={from.x} y1={from.y} x2={to.x} y2={to.y} />
-            ))}
-            {layout.nodes.map((node) => (
-              <circle
-                key={node.id}
-                cx={node.x}
-                cy={node.y}
-                r={navigatorNodeRadius}
-                className={node.id === selectedId ? "selected" : undefined}
-              />
-            ))}
-            <rect
-              className="tree-navigator-window"
-              x={Math.max(0, viewportWindow.x)}
-              y={Math.max(0, viewportWindow.y)}
-              width={Math.min(layout.width, viewportWindow.width)}
-              height={Math.min(layout.height, viewportWindow.height)}
-            />
-            {selectedNode && (
-              <circle
-                className="tree-navigator-selection"
-                cx={selectedNode.x}
-                cy={selectedNode.y}
-                r={navigatorNodeRadius * 2}
-              />
-            )}
-          </svg>
+      <div className="tree-navigator" role="group" aria-label={text.treeNavigator} hidden={!showNavigator}>
+        <div className="tree-navigator-label">
+          <strong>{text.treeNavigator}</strong>
+          <span>{text.treeNavigatorHint}</span>
         </div>
-      )}
+        <svg
+          viewBox={`0 0 ${layout.width} ${layout.height}`}
+          preserveAspectRatio="none"
+          role="img"
+          aria-label={text.treeNavigator}
+          onClick={navigateFromOverview}
+        >
+          {navigatorGraph}
+          {selectedNode && (
+            <circle
+              cx={selectedNode.x}
+              cy={selectedNode.y}
+              r={navigatorNodeRadius}
+              className="selected"
+            />
+          )}
+          <rect
+            ref={navigatorWindowRef}
+            className="tree-navigator-window"
+            x={0}
+            y={0}
+            width={0}
+            height={0}
+          />
+          {selectedNode && (
+            <circle
+              className="tree-navigator-selection"
+              cx={selectedNode.x}
+              cy={selectedNode.y}
+              r={navigatorNodeRadius * 2}
+            />
+          )}
+        </svg>
+      </div>
     </div>
   );
 }

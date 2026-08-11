@@ -1,11 +1,20 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { parsePgnCollection } from "../features/explorer/services/pgnParser";
-import { buildTree, popularityPercentage, resultCount } from "../features/explorer/services/treeBuilder";
+import {
+  countPgnMainlineMoveTokens,
+  parsePgnCollection,
+} from "../features/explorer/services/pgnParser";
+import {
+  buildTree,
+  buildTreeFromPreparedLines,
+  popularityPercentage,
+  resultCount,
+} from "../features/explorer/services/treeBuilder";
 import {
   DEFAULT_LOCALE,
   firstMovesLabel,
   gamesLabel,
+  importErrorMessage,
   importSuccess,
   knownResultsLabel,
   messages,
@@ -13,10 +22,30 @@ import {
 import { playBoardMove } from "../features/explorer/services/boardMove";
 import { Chess } from "chess.js";
 import { DEFAULT_SETTINGS, normalizeSettings } from "../features/explorer/settings";
-import { validateSanSequence } from "../features/explorer/services/sanParser";
+import {
+  validateSanContexts,
+  validateSanSequence,
+} from "../features/explorer/services/sanParser";
 import { fitTreeZoom, layoutTree, smartFitTreeZoom } from "../features/explorer/services/treeLayout";
 import { createSanPasteState, sanPasteReducer } from "../features/explorer/services/sanPasteState";
+import { acceptSanInput, insertSanInput } from "../features/explorer/services/sanInput";
 import { formatBuildVersion } from "../features/explorer/services/buildVersion";
+import { createManualLine, upsertManualLine } from "../features/explorer/services/manualLines";
+import { appendManualMoveToTree } from "../features/explorer/services/manualTree";
+import { createAnimationFrameScheduler } from "../features/explorer/services/viewportScheduler";
+import { isExplorerDataMutationLocked } from "../features/explorer/services/explorerTaskLock";
+import type { LineRecord } from "../features/explorer/types";
+import {
+  assertFileSizeWithinLimit,
+  InputLimitError,
+} from "../features/explorer/services/inputLimits";
+import type { InputLimitErrorCode } from "../features/explorer/services/inputLimits";
+import {
+  monotonicProgress,
+  processLineBuild,
+  processImportText,
+  processSanValidation,
+} from "../features/explorer/services/importPipeline";
 import {
   downloadBaseName,
   parseChessTreeJson,
@@ -40,6 +69,13 @@ const initialBoardBlackToMoveFen =
 const expectIntegrityCode = (code: "mixed-start-fen" | "unsafe-integer") =>
   (error: unknown) => {
     assert.ok(error instanceof LineIntegrityError);
+    assert.equal(error.code, code);
+    return true;
+  };
+
+const expectInputLimitCode = (code: InputLimitErrorCode) =>
+  (error: unknown) => {
+    assert.ok(error instanceof InputLimitError);
     assert.equal(error.code, code);
     return true;
   };
@@ -296,6 +332,38 @@ test("lays out the move tree to the right or downward", () => {
   assert.ok(downChild.y > downRoot.y);
 });
 
+test("keeps data mutations locked across async import render boundaries", () => {
+  assert.equal(isExplorerDataMutationLocked(false, null), false);
+  assert.equal(isExplorerDataMutationLocked(false, "file"), true);
+  assert.equal(isExplorerDataMutationLocked(false, "tree"), true);
+  assert.equal(isExplorerDataMutationLocked(true, null), true);
+});
+
+test("localizes an unavailable background worker without suggesting a synchronous import", () => {
+  assert.match(importErrorMessage("en", { code: "worker-unavailable" }), /background processing/);
+  assert.match(importErrorMessage("el", { code: "worker-unavailable" }), /παρασκήνιο/);
+});
+
+test("lays out a custom-FEN tree from the viewport origin, independent of fullmove number", () => {
+  const tree = buildTree([{
+    startFen: initialBoardBlackToMoveFen,
+    moves: ["c5"],
+    opening: "Custom start",
+    results: { white: 0, draw: 0, black: 0, unknown: 1 },
+  }]);
+  const right = layoutTree(tree, new Set(), "right");
+  const down = layoutTree(tree, new Set(), "down");
+  const rightRoot = right.nodes.find((node) => node.id === "start")!;
+  const rightChild = right.nodes.find((node) => node.parentId === "start")!;
+  const downRoot = down.nodes.find((node) => node.id === "start")!;
+  const downChild = down.nodes.find((node) => node.parentId === "start")!;
+
+  assert.equal(rightRoot.x, 54);
+  assert.equal(rightChild.x - rightRoot.x, 82);
+  assert.equal(downRoot.y, 48);
+  assert.equal(downChild.y - downRoot.y, 70);
+});
+
 test("fits the complete tree inside the available viewport", () => {
   assert.equal(fitTreeZoom(2000, 1000, 1000, 600), 0.472);
   assert.equal(fitTreeZoom(400, 300, 1000, 700), 1);
@@ -307,12 +375,65 @@ test("clears validated SAN when clipboard content is replaced with empty text", 
   const valid = validateSanSequence("e4");
   let state = createSanPasteState();
   state = sanPasteReducer(state, { type: "edit", value: "e4" });
-  state = sanPasteReducer(state, { type: "validated", fromStart: valid, fromSelected: valid });
+  state = sanPasteReducer(state, { type: "validation-started", requestId: 1, value: "e4" });
+  state = sanPasteReducer(state, {
+    type: "validated",
+    requestId: 1,
+    value: "e4",
+    fromStart: valid,
+    fromSelected: valid,
+  });
   state = sanPasteReducer(state, { type: "replace", value: "" });
 
   assert.equal(state.value, "");
   assert.equal(state.fromStart, null);
   assert.equal(state.fromSelected, null);
+});
+
+test("keeps stale SAN worker results out and progress monotonic", () => {
+  const e4 = validateSanSequence("e4");
+  let state = createSanPasteState();
+  state = sanPasteReducer(state, { type: "edit", value: "e4" });
+  state = sanPasteReducer(state, { type: "validation-started", requestId: 7, value: "e4" });
+  state = sanPasteReducer(state, { type: "validation-progress", requestId: 7, percent: 60 });
+  state = sanPasteReducer(state, { type: "validation-progress", requestId: 7, percent: 20 });
+  assert.equal(state.validationProgress, 60);
+
+  state = sanPasteReducer(state, { type: "edit", value: "d4" });
+  const staleState = state;
+  state = sanPasteReducer(state, {
+    type: "validated",
+    requestId: 7,
+    value: "e4",
+    fromStart: e4,
+    fromSelected: e4,
+  });
+  assert.equal(state, staleState);
+  assert.equal(state.checkedValue, "");
+  assert.equal(state.validationStatus, "scheduled");
+});
+
+test("rejects oversized SAN before retaining it in controlled input state", () => {
+  const exact = acceptSanInput("12345", 5);
+  assert.deepEqual(exact, { accepted: true, value: "12345" });
+
+  const oversized = acceptSanInput("123456", 5);
+  assert.equal(oversized.accepted, false);
+  assert.equal("value" in oversized, false);
+  if (!oversized.accepted) {
+    assert.deepEqual(oversized.error, { code: "san-length", limit: 5, actual: 6 });
+  }
+
+  const insertion = insertSanInput("e4 e5", " Nf3", 5, 5, 8);
+  assert.equal(insertion.accepted, false);
+  if (!insertion.accepted) assert.equal(insertion.error.actual, 9);
+
+  let state = sanPasteReducer(createSanPasteState(), { type: "edit", value: "e4" });
+  if (!oversized.accepted) {
+    state = sanPasteReducer(state, { type: "input-rejected", error: oversized.error });
+  }
+  assert.equal(state.value, "e4");
+  assert.equal(state.inputLimit?.actual, 6);
 });
 
 test("marks uncommitted builds as dirty", () => {
@@ -321,6 +442,288 @@ test("marks uncommitted builds as dirty", () => {
 
   assert.equal(clean, "version_20260810_1846_commit_abcdef0");
   assert.equal(dirty, "version_20260810_1846_commit_abcdef0_dirty");
+});
+
+test("coalesces viewport work to one animation frame and cancels pending work", () => {
+  let queued: FrameRequestCallback | undefined;
+  let requestCount = 0;
+  let cancelCount = 0;
+  let updateCount = 0;
+  const scheduler = createAnimationFrameScheduler(
+    () => { updateCount += 1; },
+    (callback) => {
+      requestCount += 1;
+      queued = callback;
+      return requestCount;
+    },
+    () => { cancelCount += 1; },
+  );
+
+  scheduler.schedule();
+  scheduler.schedule();
+  assert.equal(requestCount, 1);
+  queued?.(0);
+  assert.equal(updateCount, 1);
+
+  scheduler.schedule();
+  assert.equal(requestCount, 2);
+  scheduler.cancel();
+  assert.equal(cancelCount, 1);
+});
+
+test("keeps sequential manual play as one line instead of every prefix", () => {
+  let lines: LineRecord[] = [];
+  for (let depth = 1; depth <= 100; depth += 1) {
+    const moves = Array.from({ length: depth }, (_, index) => `move-${index + 1}`);
+    lines = upsertManualLine(lines, moves, standardStartFen);
+  }
+
+  assert.equal(lines.length, 1);
+  assert.equal(lines[0].moves.length, 100);
+
+  const statistical: LineRecord = {
+    startFen: standardStartFen,
+    moves: ["e4"],
+    opening: "Imported",
+    results: { white: 1, draw: 0, black: 0, unknown: 0 },
+  };
+  const withImported = upsertManualLine([statistical], ["e4", "e5"], standardStartFen);
+  assert.equal(withImported.length, 2);
+  assert.equal(withImported[0], statistical);
+});
+
+test("appends a board move by cloning only its ancestor path without replay", () => {
+  const tree = buildTree([
+    createManualLine(["e4"], standardStartFen),
+    createManualLine(["d4"], standardStartFen),
+  ]);
+  const e4 = tree.children.find((node) => node.san === "e4")!;
+  const d4 = tree.children.find((node) => node.san === "d4")!;
+  const played = playBoardMove(e4.fen, "e7", "e5")!;
+  const updated = appendManualMoveToTree(tree, e4.id, played);
+  const updatedE4 = updated.children.find((node) => node.san === "e4")!;
+
+  assert.notEqual(updated, tree);
+  assert.notEqual(updatedE4, e4);
+  assert.equal(updated.children.find((node) => node.san === "d4"), d4);
+  assert.equal(e4.children.length, 0);
+  assert.equal(updatedE4.children[0].san, "e5");
+  assert.equal(updatedE4.children[0].fen, played.fen);
+  assert.deepEqual(updatedE4.children[0].openingTotals, { __manual__: 0 });
+});
+
+test("enforces file, line, ply, depth, and node budgets at their boundaries", () => {
+  assert.doesNotThrow(() => assertFileSizeWithinLimit(8, { maxFileBytes: 8 }));
+  assert.throws(
+    () => assertFileSizeWithinLimit(9, { maxFileBytes: 8 }),
+    expectInputLimitCode("file-size"),
+  );
+
+  const line = createManualLine(["e4", "e5"], standardStartFen);
+  assert.doesNotThrow(() => buildTree([line], {
+    maxLines: 1,
+    maxTotalPlies: 2,
+    maxDepth: 2,
+    maxNodes: 3,
+  }));
+  assert.throws(() => buildTree([line], { maxLines: 0 }), expectInputLimitCode("line-count"));
+  assert.throws(() => buildTree([line], { maxTotalPlies: 1 }), expectInputLimitCode("total-plies"));
+  assert.throws(() => buildTree([line], { maxDepth: 1 }), expectInputLimitCode("depth"));
+  assert.throws(() => buildTree([line], { maxNodes: 2 }), expectInputLimitCode("node-count"));
+});
+
+test("counts repeated input plies even when games share the same tree nodes", () => {
+  const line = createManualLine(["e4", "e5"], standardStartFen);
+  const tree = buildTree([line, line], { maxTotalPlies: 4, maxNodes: 3 });
+
+  assert.equal(tree.children.length, 1);
+  assert.equal(tree.children[0].children.length, 1);
+  assert.throws(
+    () => buildTree([line, line], { maxTotalPlies: 3, maxNodes: 3 }),
+    expectInputLimitCode("total-plies"),
+  );
+});
+
+test("budgets all encountered PGN games and supports no-replay prepared trees", () => {
+  const twoGames = `1. e4 1-0
+
+1. d4 0-1`;
+  const parsed = parsePgnCollection(twoGames, {
+    maxGames: 2,
+    maxLines: 2,
+    maxTotalPlies: 2,
+    maxDepth: 1,
+  });
+
+  assert.equal(parsed.gameCount, 2);
+  assert.equal(parsed.preparedLines.length, 2);
+  assert.deepEqual(buildTreeFromPreparedLines(parsed.preparedLines), buildTree(parsed.lines));
+  assert.throws(
+    () => parsePgnCollection(twoGames, { maxGames: 1 }),
+    expectInputLimitCode("game-count"),
+  );
+  assert.throws(
+    () => parsePgnCollection(twoGames, { maxLines: 1 }),
+    expectInputLimitCode("line-count"),
+  );
+  assert.throws(
+    () => parsePgnCollection(twoGames, { maxTotalPlies: 1 }),
+    expectInputLimitCode("total-plies"),
+  );
+  assert.throws(
+    () => parsePgnCollection(twoGames, { maxNodes: 2 }),
+    expectInputLimitCode("node-count"),
+  );
+
+  const invalidThenValid = `1. NotAMove 1-0
+
+1. e4 1-0`;
+  assert.throws(
+    () => parsePgnCollection(invalidThenValid, { maxGames: 1 }),
+    expectInputLimitCode("game-count"),
+  );
+  assert.doesNotThrow(() => parsePgnCollection("1. e4 *", { maxPgnBlockBytes: 7 }));
+  assert.throws(
+    () => parsePgnCollection("1. e4 *", { maxPgnBlockBytes: 6 }),
+    expectInputLimitCode("pgn-block-size"),
+  );
+
+  const annotated = `[Result "*"]
+
+1. e4 (1. d4 d5 (1... Nf6)) {Nf3 is mentioned here} e5
+2. Nf3 $1 ; Nc6 is only a comment
+*`;
+  assert.equal(countPgnMainlineMoveTokens(annotated), 3);
+  assert.throws(
+    () => parsePgnCollection("1. NotAMove AnotherBadToken ThirdBadToken *", { maxDepth: 2 }),
+    expectInputLimitCode("depth"),
+  );
+});
+
+test("bounds SAN text, tokens, nesting, lines, output plies, and depth", () => {
+  const san = "1. e4 e5 (1... c5)";
+  const exact = validateSanSequence(san, undefined, {
+    maxSanCharacters: san.length,
+    maxSanTokens: 5,
+    maxSanNesting: 1,
+    maxSanOutputLines: 2,
+    maxSanOutputPlies: 4,
+    maxLines: 2,
+    maxTotalPlies: 4,
+    maxDepth: 2,
+    maxNodes: 4,
+  });
+  assert.equal(exact.valid, true);
+
+  const expectSanLimit = (result: ReturnType<typeof validateSanSequence>, code: InputLimitErrorCode) => {
+    assert.equal(result.valid, false);
+    if (!result.valid) {
+      assert.equal(result.errorCode, "input-limit");
+      assert.equal(result.inputLimit?.code, code);
+    }
+  };
+  expectSanLimit(validateSanSequence(san, undefined, { maxSanCharacters: san.length - 1 }), "san-length");
+  expectSanLimit(validateSanSequence(san, undefined, { maxSanTokens: 4 }), "san-token-count");
+  expectSanLimit(validateSanSequence(san, undefined, { maxSanNesting: 0 }), "san-nesting");
+  expectSanLimit(validateSanSequence(san, undefined, { maxSanOutputLines: 1 }), "san-output-lines");
+  expectSanLimit(validateSanSequence(san, undefined, { maxSanOutputPlies: 3 }), "san-output-plies");
+  expectSanLimit(validateSanSequence(san, undefined, { maxLines: 1 }), "line-count");
+  expectSanLimit(validateSanSequence(san, undefined, { maxTotalPlies: 3 }), "total-plies");
+  expectSanLimit(validateSanSequence(san, undefined, { maxDepth: 1 }), "depth");
+  expectSanLimit(validateSanSequence(san, undefined, { maxNodes: 3 }), "node-count");
+});
+
+test("shares same-position SAN validation and returns the parser's final FEN", () => {
+  const contexts = validateSanContexts("1. e4 e5 2. Nf3", standardStartFen);
+  assert.equal(contexts.fromSelected, contexts.fromStart);
+  assert.equal(contexts.fromStart.valid, true);
+
+  if (contexts.fromStart.valid) {
+    const expected = new Chess();
+    expected.move("e4");
+    expected.move("e5");
+    expected.move("Nf3");
+    assert.equal(contexts.fromStart.finalFen, expected.fen());
+  }
+
+  const customPgn = `[SetUp "1"]
+[FEN "${blackToMoveFen}"]
+
+37... Kh2 38. Kf3`;
+  const customContexts = validateSanContexts(customPgn, blackToMoveFen);
+  assert.equal(customContexts.fromSelected, customContexts.fromStart);
+
+  const mismatch = validateSanContexts(customPgn, standardStartFen);
+  assert.equal(mismatch.fromSelected.valid, false);
+  if (!mismatch.fromSelected.valid) {
+    assert.equal(mismatch.fromSelected.errorCode, "start-position-mismatch");
+  }
+});
+
+test("processes SAN validation through one worker payload with monotonic progress", () => {
+  const progress: Array<{ percent: number; stage: string }> = [];
+  const payload = processSanValidation(
+    "1. e4 e5",
+    standardStartFen,
+    (next) => progress.push(next),
+  );
+
+  assert.deepEqual(progress, [
+    { percent: 10, stage: "validating" },
+    { percent: 100, stage: "validating" },
+  ]);
+  assert.equal(payload.fromStart.valid, true);
+  assert.equal(payload.fromSelected, payload.fromStart);
+});
+
+test("validates JSON in one authoritative worker replay and preserves atomic payloads", () => {
+  const invalidLine = createManualLine(["e5"], standardStartFen);
+  const content = JSON.stringify({
+    format: "chesstree",
+    version: 1,
+    sourceFileName: null,
+    lines: [invalidLine],
+    settings: DEFAULT_SETTINGS,
+  });
+
+  assert.throws(() => parseChessTreeJson(content));
+  assert.equal(parseChessTreeJson(content, { deferMoveValidation: true }).lines.length, 1);
+  assert.throws(() => processImportText(content, "json"), (error: unknown) => {
+    assert.equal((error as { code?: string }).code, "invalid-tree-file");
+    return true;
+  });
+
+  const progress: number[] = [];
+  const payload = processImportText(collection, "pgn", ({ percent }) => progress.push(percent));
+  assert.deepEqual(progress, [25, 72, 100]);
+  assert.equal(payload.lines.length, 2);
+  assert.equal(payload.tree.children[0].san, "c4");
+
+  const monotonic: number[] = [];
+  const report = monotonicProgress(({ percent }) => monotonic.push(percent));
+  report({ percent: 50, stage: "parsing" });
+  report({ percent: 20, stage: "reading" });
+  report({ percent: 120, stage: "building" });
+  assert.deepEqual(monotonic, [50, 50, 100]);
+
+  const buildProgress: number[] = [];
+  const rebuilt = processLineBuild(
+    [createManualLine(["e4", "e5"], standardStartFen)],
+    ({ percent }) => buildProgress.push(percent),
+  );
+  assert.deepEqual(buildProgress, [15, 100]);
+  assert.equal(rebuilt.tree.children[0].children[0].san, "e5");
+});
+
+test("localizes typed resource-limit errors with the configured limit", () => {
+  assert.match(
+    importErrorMessage("en", { code: "node-count", limit: 5, actual: 6 }),
+    /5-node limit/,
+  );
+  assert.match(
+    importErrorMessage("el", { code: "san-nesting", limit: 32, actual: 33 }),
+    /32/,
+  );
 });
 
 test("parses and builds a PGN that starts from a custom FEN", () => {

@@ -4,12 +4,21 @@ import {
   LineIntegrityError,
   startPlyFromFen,
 } from "./lineIntegrity";
+import {
+  assertWithinInputLimit,
+  InputLimitError,
+  type InputLimitErrorCode,
+  type InputLimitOverrides,
+  type InputLimits,
+  resolveInputLimits,
+} from "./inputLimits";
 
 export type SanValidationErrorCode =
   | "invalid-san"
   | "invalid-fen"
   | "start-position-mismatch"
-  | "unsafe-integer";
+  | "unsafe-integer"
+  | "input-limit";
 
 export type SanValidationResult =
   | { valid: true; moves: string[]; lines: string[][]; finalFen: string; startFen: string }
@@ -19,7 +28,17 @@ export type SanValidationResult =
       invalidToken: string;
       tokenNumber: number;
       errorCode: SanValidationErrorCode;
+      inputLimit?: {
+        code: InputLimitErrorCode;
+        limit: number;
+        actual: number;
+      };
     };
+
+export type SanValidationContexts = {
+  fromStart: SanValidationResult;
+  fromSelected: SanValidationResult;
+};
 
 type SanToken = {
   value: string;
@@ -29,7 +48,13 @@ type SanToken = {
 type ParsedSequence = {
   mainLine: string[];
   lines: string[][];
+  finalFen: string;
   nextIndex: number;
+};
+
+type SanOutputBudget = {
+  lines: number;
+  plies: number;
 };
 
 class SanParseError extends Error {
@@ -42,7 +67,81 @@ class SanParseError extends Error {
   }
 }
 
-export function validateSanSequence(text: string, startFen?: string): SanValidationResult {
+export function validateSanSequence(
+  text: string,
+  startFen?: string,
+  limitOverrides: InputLimitOverrides = {},
+): SanValidationResult {
+  try {
+    return validateSanSequenceWithinLimits(text, startFen, limitOverrides);
+  } catch (error) {
+    if (error instanceof InputLimitError) {
+      return {
+        valid: false,
+        moves: [],
+        invalidToken: "",
+        tokenNumber: 1,
+        errorCode: "input-limit",
+        inputLimit: { code: error.code, limit: error.limit, actual: error.actual },
+      };
+    }
+    throw error;
+  }
+}
+
+/**
+ * Validates the two Paste SAN destinations while sharing the result whenever
+ * both destinations resolve to the same starting position. A declared FEN
+ * mismatch is also reported without replaying the moves a second time.
+ */
+export function validateSanContexts(
+  text: string,
+  selectedFen: string,
+  limitOverrides: InputLimitOverrides = {},
+): SanValidationContexts {
+  const fromStart = validateSanSequence(text, undefined, limitOverrides);
+
+  if (!fromStart.valid && fromStart.errorCode === "input-limit") {
+    return { fromStart, fromSelected: fromStart };
+  }
+
+  const resolvedFromStart = resolveStartPosition(text);
+  if (!resolvedFromStart.valid) {
+    return { fromStart, fromSelected: fromStart };
+  }
+
+  let normalizedSelectedFen: string;
+  try {
+    normalizedSelectedFen = new Chess(selectedFen).fen();
+  } catch {
+    const fromSelected = invalidValidationResult("invalid-fen");
+    return { fromStart, fromSelected };
+  }
+
+  if (resolvedFromStart.startFen === normalizedSelectedFen) {
+    return { fromStart, fromSelected: fromStart };
+  }
+
+  if (extractHeaderValues(text, "fen").length > 0) {
+    return {
+      fromStart,
+      fromSelected: invalidValidationResult("start-position-mismatch"),
+    };
+  }
+
+  return {
+    fromStart,
+    fromSelected: validateSanSequence(text, normalizedSelectedFen, limitOverrides),
+  };
+}
+
+function validateSanSequenceWithinLimits(
+  text: string,
+  startFen: string | undefined,
+  limitOverrides: InputLimitOverrides,
+): SanValidationResult {
+  const limits = resolveInputLimits(limitOverrides);
+  assertWithinInputLimit("san-length", text.length, limits.maxSanCharacters);
   const resolvedPosition = resolveStartPosition(text, startFen);
   if (!resolvedPosition.valid) {
     return {
@@ -54,7 +153,7 @@ export function validateSanSequence(text: string, startFen?: string): SanValidat
     };
   }
 
-  const tokens = tokenizeSan(text);
+  const tokens = tokenizeSan(text, limits);
   if (!tokens.length) {
     return {
       valid: false,
@@ -66,19 +165,29 @@ export function validateSanSequence(text: string, startFen?: string): SanValidat
   }
 
   try {
-    const parsed = parseSequence(tokens, 0, [], resolvedPosition.startFen, false);
+    const parsed = parseSequence(
+      tokens,
+      0,
+      [],
+      resolvedPosition.startFen,
+      false,
+      0,
+      { lines: 0, plies: 0 },
+      limits,
+    );
     const lines = uniqueLines(parsed.lines);
+    assertSanNodeBudget(lines, limits);
     const startPly = startPlyFromFen(resolvedPosition.startFen);
     for (const line of lines) checkedAddNonNegativeIntegers(startPly, line.length);
-    const chess = replayLine(parsed.mainLine, resolvedPosition.startFen);
     return {
       valid: true,
       moves: parsed.mainLine,
       lines,
-      finalFen: chess.fen(),
+      finalFen: parsed.finalFen,
       startFen: resolvedPosition.startFen,
     };
   } catch (error) {
+    if (error instanceof InputLimitError) throw error;
     if (error instanceof LineIntegrityError && error.code === "unsafe-integer") {
       return {
         valid: false,
@@ -149,7 +258,7 @@ function extractHeaderValues(text: string, headerName: string) {
   return values;
 }
 
-function tokenizeSan(text: string) {
+function tokenizeSan(text: string, limits: InputLimits) {
   const withoutHeaders = text.replace(
     /^\s*\[\s*[A-Za-z0-9_]+\s+"(?:\\.|[^"\\])*"\s*\]\s*$/gm,
     " ",
@@ -160,7 +269,7 @@ function tokenizeSan(text: string) {
     .replace(/\$\d+/g, " ");
 
   let moveNumber = 0;
-  return withoutComments
+  const tokens = withoutComments
     .replace(/([()])/g, " $1 ")
     .split(/\s+/)
     .map((token) => token.trim())
@@ -171,6 +280,8 @@ function tokenizeSan(text: string) {
       value,
       moveNumber: value === "(" || value === ")" ? moveNumber : ++moveNumber,
     }));
+  assertWithinInputLimit("san-token-count", tokens.length, limits.maxSanTokens);
+  return tokens;
 }
 
 function parseSequence(
@@ -179,6 +290,9 @@ function parseSequence(
   prefix: string[],
   startFen: string | undefined,
   expectClose: boolean,
+  nestingDepth: number,
+  outputBudget: SanOutputBudget,
+  limits: InputLimits,
 ): ParsedSequence {
   const moves = [...prefix];
   const variationLines: string[][] = [];
@@ -189,7 +303,18 @@ function parseSequence(
     const token = tokens[index];
     if (token.value === "(") {
       if (!moves.length) throw new SanParseError(moves, token.value, token.moveNumber + 1);
-      const variation = parseSequence(tokens, index + 1, moves.slice(0, -1), startFen, true);
+      const nextNestingDepth = nestingDepth + 1;
+      assertWithinInputLimit("san-nesting", nextNestingDepth, limits.maxSanNesting);
+      const variation = parseSequence(
+        tokens,
+        index + 1,
+        moves.slice(0, -1),
+        startFen,
+        true,
+        nextNestingDepth,
+        outputBudget,
+        limits,
+      );
       variationLines.push(...variation.lines);
       index = variation.nextIndex;
       continue;
@@ -199,27 +324,87 @@ function parseSequence(
       if (moves.length === prefix.length) {
         throw new SanParseError(moves, token.value, token.moveNumber + 1);
       }
-      return { mainLine: moves, lines: [moves, ...variationLines], nextIndex: index + 1 };
+      registerSanOutputLine(moves.length, outputBudget, limits);
+      return {
+        mainLine: moves,
+        lines: [moves, ...variationLines],
+        finalFen: chess.fen(),
+        nextIndex: index + 1,
+      };
     }
 
     try {
       const played = chess.move(token.value);
       if (!played) throw new Error("Illegal SAN move");
       moves.push(played.san);
-    } catch {
+      assertWithinInputLimit("depth", moves.length, limits.maxDepth);
+    } catch (error) {
+      if (error instanceof InputLimitError) throw error;
       throw new SanParseError(moves, token.value, token.moveNumber);
     }
     index += 1;
   }
 
   if (expectClose) throw new SanParseError(moves, "(", tokens.at(-1)?.moveNumber ?? 1);
-  return { mainLine: moves, lines: [moves, ...variationLines], nextIndex: index };
+  registerSanOutputLine(moves.length, outputBudget, limits);
+  return {
+    mainLine: moves,
+    lines: [moves, ...variationLines],
+    finalFen: chess.fen(),
+    nextIndex: index,
+  };
+}
+
+function registerSanOutputLine(
+  linePlies: number,
+  outputBudget: SanOutputBudget,
+  limits: InputLimits,
+) {
+  const nextLines = outputBudget.lines + 1;
+  assertWithinInputLimit("san-output-lines", nextLines, limits.maxSanOutputLines);
+  assertWithinInputLimit("line-count", nextLines, limits.maxLines);
+
+  const nextPlies = outputBudget.plies + linePlies;
+  assertWithinInputLimit("san-output-plies", nextPlies, limits.maxSanOutputPlies);
+  assertWithinInputLimit("total-plies", nextPlies, limits.maxTotalPlies);
+
+  outputBudget.lines = nextLines;
+  outputBudget.plies = nextPlies;
+}
+
+function assertSanNodeBudget(lines: readonly (readonly string[])[], limits: InputLimits) {
+  const prefixes = new Set<string>();
+  let nodeCount = 1;
+  assertWithinInputLimit("node-count", nodeCount, limits.maxNodes);
+
+  for (const line of lines) {
+    let prefix = "";
+    for (const move of line) {
+      prefix += `\u0000${move}`;
+      if (prefixes.has(prefix)) continue;
+      prefixes.add(prefix);
+      nodeCount += 1;
+      assertWithinInputLimit("node-count", nodeCount, limits.maxNodes);
+    }
+  }
 }
 
 function replayLine(moves: string[], startFen?: string) {
   const chess = startFen ? new Chess(startFen) : new Chess();
   for (const move of moves) chess.move(move);
   return chess;
+}
+
+function invalidValidationResult(
+  errorCode: Extract<SanValidationErrorCode, "invalid-fen" | "start-position-mismatch">,
+): SanValidationResult {
+  return {
+    valid: false,
+    moves: [],
+    invalidToken: "",
+    tokenNumber: 1,
+    errorCode,
+  };
 }
 
 function uniqueLines(lines: string[][]) {
