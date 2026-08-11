@@ -6,6 +6,7 @@ import type { CSSProperties } from "react";
 import type { MoveCoordinates } from "../types";
 import { messages } from "../i18n";
 import type { Locale } from "../i18n";
+import { usePrefersReducedMotion } from "../services/reducedMotion";
 
 type ChessBoardProps = {
   fen: string;
@@ -26,6 +27,7 @@ const notationStyle: CSSProperties = {
 
 export function ChessBoard({ fen, lastMove, flipped, locale, lightSquareColor, darkSquareColor, onFlip, onMove, disabled }: ChessBoardProps) {
   const text = messages[locale];
+  const reduceMotion = usePrefersReducedMotion();
   const [selection, setSelection] = useState<{ fen: string; square: string } | null>(null);
   const selectedSquare = selection?.fen === fen ? selection.square : null;
   const squareStyles: Record<string, CSSProperties> = {};
@@ -69,8 +71,8 @@ export function ChessBoard({ fen, lastMove, flipped, locale, lightSquareColor, d
             allowDragging: !disabled,
             allowDrawingArrows: false,
             showNotation: true,
-            showAnimations: true,
-            animationDurationInMs: 220,
+            showAnimations: !reduceMotion,
+            animationDurationInMs: reduceMotion ? 0 : 220,
             squareStyles,
             onPieceDrop: ({ sourceSquare, targetSquare }) =>
               targetSquare ? tryMove(sourceSquare, targetSquare) : false,

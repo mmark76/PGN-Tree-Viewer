@@ -1,9 +1,20 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { MouseEvent as ReactMouseEvent } from "react";
+import type {
+  KeyboardEvent as ReactKeyboardEvent,
+  MouseEvent as ReactMouseEvent,
+} from "react";
 import type { TreeNode } from "../types";
 import { fitTreeZoom, layoutTree, smartFitTreeZoom } from "../services/treeLayout";
 import { popularityPercentage, resultCount } from "../services/treeBuilder";
 import { createAnimationFrameScheduler } from "../services/viewportScheduler";
+import {
+  getCollapseControlPosition,
+  getNavigatorKeyCommand,
+  getTreeKeyboardAction,
+  getVisibleTreeItems,
+  shouldShowPointerCollapseControls,
+} from "../services/treeNavigation";
+import { usePrefersReducedMotion } from "../services/reducedMotion";
 import { gamesLabel, messages } from "../i18n";
 import type { Locale } from "../i18n";
 import type { TreeDirection } from "../settings";
@@ -36,11 +47,31 @@ export function MoveTree({
   onToggle,
 }: MoveTreeProps) {
   const text = messages[locale];
+  const reduceMotion = usePrefersReducedMotion();
   const viewportRef = useRef<HTMLDivElement>(null);
   const navigatorWindowRef = useRef<SVGRectElement>(null);
   const navigatorVisibilityRef = useRef(false);
+  const treeItemRefs = useRef(new Map<string, HTMLButtonElement>());
   const [showNavigator, setShowNavigator] = useState(false);
+  const [focusedId, setFocusedId] = useState(selectedId);
   const layout = useMemo(() => layoutTree(root, collapsedIds, direction), [root, collapsedIds, direction]);
+  const treeItems = useMemo(
+    () => getVisibleTreeItems(root, collapsedIds),
+    [root, collapsedIds],
+  );
+  const visibleItemIds = useMemo(
+    () => new Set(treeItems.map(({ node }) => node.id)),
+    [treeItems],
+  );
+  const parentIds = useMemo(() => {
+    const parents = new Map<string, string | null>();
+    const collect = (node: TreeNode) => {
+      parents.set(node.id, node.parentId);
+      node.children.forEach(collect);
+    };
+    collect(root);
+    return parents;
+  }, [root]);
   const positionedNodes = useMemo(
     () => new Map(layout.nodes.map((node) => [node.id, node])),
     [layout.nodes],
@@ -54,6 +85,13 @@ export function MoveTree({
     }
     return ids;
   }, [positionedNodes, selectedId]);
+
+  const resolvedFocusedId = useMemo(() => {
+    let nextId: string | null | undefined = focusedId;
+    while (nextId && !visibleItemIds.has(nextId)) nextId = parentIds.get(nextId);
+    if (nextId) return nextId;
+    return visibleItemIds.has(selectedId) ? selectedId : root.id;
+  }, [focusedId, parentIds, root.id, selectedId, visibleItemIds]);
 
   const fitTree = useCallback(() => {
     const viewport = viewportRef.current;
@@ -119,22 +157,97 @@ export function MoveTree({
     };
   }, [layout.height, layout.width, zoom]);
 
-  const navigateFromOverview = (event: ReactMouseEvent<SVGSVGElement>) => {
+  const scrollToTreePoint = useCallback((treeX: number, treeY: number) => {
     const viewport = viewportRef.current;
-    const bounds = event.currentTarget.getBoundingClientRect();
-    if (!viewport || !bounds.width || !bounds.height) return;
-
-    const treeX = ((event.clientX - bounds.left) / bounds.width) * layout.width;
-    const treeY = ((event.clientY - bounds.top) / bounds.height) * layout.height;
+    if (!viewport) return;
     viewport.scrollTo({
       left: treeX * zoom - viewport.clientWidth / 2,
       top: treeY * zoom - viewport.clientHeight / 2,
-      behavior: "smooth",
+      behavior: reduceMotion ? "auto" : "smooth",
     });
+  }, [reduceMotion, zoom]);
+
+  const navigateFromOverview = (event: ReactMouseEvent<HTMLButtonElement>) => {
+    if (event.detail === 0) {
+      const selected = positionedNodes.get(selectedId);
+      if (selected) scrollToTreePoint(selected.x, selected.y);
+      return;
+    }
+    const bounds = event.currentTarget.getBoundingClientRect();
+    if (!bounds.width || !bounds.height) return;
+
+    const treeX = ((event.clientX - bounds.left) / bounds.width) * layout.width;
+    const treeY = ((event.clientY - bounds.top) / bounds.height) * layout.height;
+    scrollToTreePoint(treeX, treeY);
   };
 
   const navigatorNodeRadius = Math.max(5, Math.min(12, Math.min(layout.width, layout.height) / 70));
   const selectedNode = positionedNodes.get(selectedId);
+  const handleNavigatorKeyDown = (event: ReactKeyboardEvent<HTMLButtonElement>) => {
+    const command = getNavigatorKeyCommand(event.key);
+    if (!command) return;
+
+    event.preventDefault();
+    const viewport = viewportRef.current;
+    if (!viewport) return;
+    const behavior: ScrollBehavior = reduceMotion ? "auto" : "smooth";
+    const horizontalStep = Math.max(48, viewport.clientWidth * 0.3);
+    const verticalStep = Math.max(48, viewport.clientHeight * 0.3);
+
+    if (command === "center-selected") {
+      if (selectedNode) scrollToTreePoint(selectedNode.x, selectedNode.y);
+      return;
+    }
+
+    if (command === "start") {
+      viewport.scrollTo({ left: 0, top: 0, behavior });
+      return;
+    }
+
+    if (command === "end") {
+      viewport.scrollTo({
+        left: Math.max(0, viewport.scrollWidth - viewport.clientWidth),
+        top: Math.max(0, viewport.scrollHeight - viewport.clientHeight),
+        behavior,
+      });
+      return;
+    }
+
+    viewport.scrollTo({
+      left: viewport.scrollLeft
+        + (command === "pan-left" ? -horizontalStep : command === "pan-right" ? horizontalStep : 0),
+      top: viewport.scrollTop
+        + (command === "pan-up" ? -verticalStep : command === "pan-down" ? verticalStep : 0),
+      behavior,
+    });
+  };
+
+  const focusTreeItem = useCallback((id: string) => {
+    setFocusedId(id);
+    treeItemRefs.current.get(id)?.focus();
+  }, []);
+
+  const handleTreeKeyDown = useCallback((
+    event: ReactKeyboardEvent<HTMLButtonElement>,
+    id: string,
+  ) => {
+    const action = getTreeKeyboardAction(treeItems, id, event.key, collapsedIds);
+    if (!action) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+    if (action.focusId) focusTreeItem(action.focusId);
+    if (action.toggleId) {
+      setFocusedId(action.toggleId);
+      onToggle(action.toggleId);
+    }
+    if (action.selectId) onSelect(action.selectId);
+  }, [collapsedIds, focusTreeItem, onSelect, onToggle, treeItems]);
+
+  const toggleTreeItem = useCallback((id: string) => {
+    focusTreeItem(id);
+    onToggle(id);
+  }, [focusTreeItem, onToggle]);
   const navigatorGraph = useMemo(() => (
     <>
       {layout.edges.map(({ from, to }) => (
@@ -153,12 +266,25 @@ export function MoveTree({
 
   return (
     <div className="tree-viewport-shell">
-      <div ref={viewportRef} className="tree-viewport" data-orientation={direction}>
+      <div
+        id="move-tree-viewport"
+        ref={viewportRef}
+        className="tree-viewport"
+        data-orientation={direction}
+      >
         <div
           className="tree-canvas"
           style={{ width: layout.width * zoom, height: layout.height * zoom }}
         >
-          <div style={{ width: layout.width, height: layout.height, transform: `scale(${zoom})`, transformOrigin: "top left", position: "relative" }}>
+          <div
+            className="tree-lines-layer"
+            style={{
+              width: layout.width,
+              height: layout.height,
+              transform: `scale(${zoom})`,
+              transformOrigin: "top left",
+            }}
+          >
             <svg className="tree-lines" width={layout.width} height={layout.height} aria-hidden="true">
               {layout.edges.map(({ from, to }) => {
                 const midX = from.x + (to.x - from.x) * 0.52;
@@ -175,17 +301,53 @@ export function MoveTree({
                 );
               })}
             </svg>
-            {layout.nodes.map((node) => {
+          </div>
+          <div
+            className="tree-items"
+            role="tree"
+            aria-label={text.moveTree}
+            style={{
+              width: layout.width,
+              height: layout.height,
+              transform: `scale(${zoom})`,
+              transformOrigin: "top left",
+            }}
+          >
+            {treeItems.map(({ node: treeNode, level, posInSet, setSize }) => {
+              const node = positionedNodes.get(treeNode.id);
+              if (!node) return null;
               const total = resultCount(node.results);
               const parentShare = popularityPercentage(node.results, node.parentCount);
               const countLabel = total ? gamesLabel(locale, total) : "";
+              const isCollapsed = collapsedIds.has(node.id);
               return (
-                <div key={node.id} className="tree-node-wrap" style={{ left: node.x, top: node.y }}>
+                <div
+                  key={node.id}
+                  className="tree-node-wrap"
+                  role="none"
+                  style={{ left: node.x, top: node.y }}
+                >
                   <button
                     type="button"
+                    ref={(element) => {
+                      if (element) treeItemRefs.current.set(node.id, element);
+                      else treeItemRefs.current.delete(node.id);
+                    }}
+                    role="treeitem"
                     className={`move-node${node.id === selectedId ? " selected" : ""}${node.id === "start" ? " root" : ""}`}
-                    onClick={() => onSelect(node.id)}
+                    tabIndex={node.id === resolvedFocusedId ? 0 : -1}
+                    aria-selected={node.id === selectedId}
+                    aria-level={level}
+                    aria-posinset={posInSet}
+                    aria-setsize={setSize}
+                    aria-expanded={node.children.length ? !isCollapsed : undefined}
                     aria-label={`${node.id === "start" ? text.start : node.san}${countLabel ? `, ${countLabel}` : ""}`}
+                    onFocus={() => setFocusedId(node.id)}
+                    onKeyDown={(event) => handleTreeKeyDown(event, node.id)}
+                    onClick={() => {
+                      setFocusedId(node.id);
+                      onSelect(node.id);
+                    }}
                   >
                     {node.id === "start" ? (
                       <strong>{text.start}</strong>
@@ -196,60 +358,83 @@ export function MoveTree({
                       </>
                     )}
                   </button>
-                  {node.children.length > 0 && (
-                    <button
-                      type="button"
-                      className="collapse-control"
-                      aria-label={collapsedIds.has(node.id) ? text.openBranch : text.closeBranch}
-                      onClick={() => onToggle(node.id)}
-                    >
-                      {collapsedIds.has(node.id) ? "+" : "−"}
-                    </button>
-                  )}
                 </div>
               );
             })}
           </div>
+          {shouldShowPointerCollapseControls(zoom) && (
+            <div className="tree-collapse-overlay" aria-hidden="true">
+              {treeItems.map(({ node: treeNode }) => {
+                const node = positionedNodes.get(treeNode.id);
+                if (!node?.children.length) return null;
+                const controlPosition = getCollapseControlPosition(node, zoom, direction);
+                return (
+                  <span
+                    key={node.id}
+                    className="collapse-control"
+                    aria-hidden="true"
+                    style={controlPosition}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      toggleTreeItem(node.id);
+                    }}
+                  >
+                    <span className="collapse-control-glyph">
+                      {collapsedIds.has(node.id) ? "+" : "−"}
+                    </span>
+                  </span>
+                );
+              })}
+            </div>
+          )}
         </div>
       </div>
-      <div className="tree-navigator" role="group" aria-label={text.treeNavigator} hidden={!showNavigator}>
+      <div className="tree-navigator" hidden={!showNavigator}>
         <div className="tree-navigator-label">
           <strong>{text.treeNavigator}</strong>
           <span>{text.treeNavigatorHint}</span>
         </div>
-        <svg
-          viewBox={`0 0 ${layout.width} ${layout.height}`}
-          preserveAspectRatio="none"
-          role="img"
-          aria-label={text.treeNavigator}
+        <button
+          type="button"
+          className="tree-navigator-map"
+          aria-label={`${text.treeNavigator}. ${text.treeNavigatorHint}`}
+          aria-controls="move-tree-viewport"
           onClick={navigateFromOverview}
+          onKeyDown={handleNavigatorKeyDown}
         >
-          {navigatorGraph}
-          {selectedNode && (
-            <circle
-              cx={selectedNode.x}
-              cy={selectedNode.y}
-              r={navigatorNodeRadius}
-              className="selected"
+          <svg
+            viewBox={`0 0 ${layout.width} ${layout.height}`}
+            preserveAspectRatio="none"
+            aria-hidden="true"
+            focusable="false"
+          >
+            {navigatorGraph}
+            {selectedNode && (
+              <circle
+                cx={selectedNode.x}
+                cy={selectedNode.y}
+                r={navigatorNodeRadius}
+                className="selected"
+              />
+            )}
+            <rect
+              ref={navigatorWindowRef}
+              className="tree-navigator-window"
+              x={0}
+              y={0}
+              width={0}
+              height={0}
             />
-          )}
-          <rect
-            ref={navigatorWindowRef}
-            className="tree-navigator-window"
-            x={0}
-            y={0}
-            width={0}
-            height={0}
-          />
-          {selectedNode && (
-            <circle
-              className="tree-navigator-selection"
-              cx={selectedNode.x}
-              cy={selectedNode.y}
-              r={navigatorNodeRadius * 2}
-            />
-          )}
-        </svg>
+            {selectedNode && (
+              <circle
+                className="tree-navigator-selection"
+                cx={selectedNode.x}
+                cy={selectedNode.y}
+                r={navigatorNodeRadius * 2}
+              />
+            )}
+          </svg>
+        </button>
       </div>
     </div>
   );

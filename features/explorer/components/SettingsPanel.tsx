@@ -1,10 +1,12 @@
 "use client";
 
-import { useEffect } from "react";
+import { useRef } from "react";
+import type { RefObject } from "react";
 import type { BoardSize, ExplorerSettings, FontChoice, TextSize, TreeDirection } from "../settings";
 import { DEFAULT_SETTINGS } from "../settings";
 import { messages } from "../i18n";
 import type { Locale } from "../i18n";
+import { useModalFocus } from "../services/modalFocus";
 
 type SettingsPanelProps = {
   locale: Locale;
@@ -15,25 +17,32 @@ type SettingsPanelProps = {
 
 export function SettingsPanel({ locale, settings, onChange, onClose }: SettingsPanelProps) {
   const text = messages[locale];
-
-  useEffect(() => {
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
-    };
-    document.addEventListener("keydown", closeOnEscape);
-    return () => document.removeEventListener("keydown", closeOnEscape);
-  }, [onClose]);
+  const dialogRef = useRef<HTMLElement>(null);
+  const initialFocusRef = useRef<HTMLInputElement>(null);
+  useModalFocus({ dialogRef, initialFocusRef, onClose });
 
   const update = <Key extends keyof ExplorerSettings>(key: Key, value: ExplorerSettings[Key]) =>
     onChange({ ...settings, [key]: value });
 
   return (
-    <div className="settings-backdrop" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
-      <section className="settings-dialog" role="dialog" aria-modal="true" aria-labelledby="settings-title">
+    <div
+      className="settings-backdrop"
+      data-modal-root
+      onMouseDown={(event) => event.target === event.currentTarget && onClose()}
+    >
+      <section
+        ref={dialogRef}
+        className="settings-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="settings-title"
+        aria-describedby="settings-description"
+        tabIndex={-1}
+      >
         <div className="settings-head">
           <div>
             <h2 id="settings-title">{text.settings}</h2>
-            <p>{text.settingsDescription}</p>
+            <p id="settings-description">{text.settingsDescription}</p>
           </div>
           <button className="settings-close" type="button" onClick={onClose} aria-label={text.closeSettings}>×</button>
         </div>
@@ -42,7 +51,12 @@ export function SettingsPanel({ locale, settings, onChange, onClose }: SettingsP
           <fieldset className="settings-group">
             <legend>{text.colors}</legend>
             <div className="color-settings">
-              <ColorSetting label={text.accentColor} value={settings.accentColor} onChange={(value) => update("accentColor", value)} />
+              <ColorSetting
+                inputRef={initialFocusRef}
+                label={text.accentColor}
+                value={settings.accentColor}
+                onChange={(value) => update("accentColor", value)}
+              />
               <ColorSetting label={text.lightSquares} value={settings.lightSquareColor} onChange={(value) => update("lightSquareColor", value)} />
               <ColorSetting label={text.darkSquares} value={settings.darkSquareColor} onChange={(value) => update("darkSquareColor", value)} />
             </div>
@@ -110,17 +124,18 @@ export function SettingsPanel({ locale, settings, onChange, onClose }: SettingsP
 }
 
 type ColorSettingProps = {
+  inputRef?: RefObject<HTMLInputElement | null>;
   label: string;
   value: string;
   onChange: (value: string) => void;
 };
 
-function ColorSetting({ label, value, onChange }: ColorSettingProps) {
+function ColorSetting({ inputRef, label, value, onChange }: ColorSettingProps) {
   return (
     <label className="color-setting">
       <span>{label}</span>
       <span className="color-control">
-        <input type="color" value={value} onChange={(event) => onChange(event.target.value)} />
+        <input ref={inputRef} type="color" value={value} onChange={(event) => onChange(event.target.value)} />
         <code>{value.toUpperCase()}</code>
       </span>
     </label>

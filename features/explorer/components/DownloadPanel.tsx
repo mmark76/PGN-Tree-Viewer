@@ -1,8 +1,10 @@
 "use client";
 
-import { useEffect } from "react";
+import { useRef } from "react";
+import type { RefObject } from "react";
 import { messages } from "../i18n";
 import type { Locale } from "../i18n";
+import { useModalFocus } from "../services/modalFocus";
 
 export type DownloadFormat = "pgn" | "json" | "svg";
 
@@ -14,14 +16,9 @@ type DownloadPanelProps = {
 
 export function DownloadPanel({ locale, onDownload, onClose }: DownloadPanelProps) {
   const text = messages[locale];
-
-  useEffect(() => {
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
-    };
-    document.addEventListener("keydown", closeOnEscape);
-    return () => document.removeEventListener("keydown", closeOnEscape);
-  }, [onClose]);
+  const dialogRef = useRef<HTMLElement>(null);
+  const initialFocusRef = useRef<HTMLButtonElement>(null);
+  useModalFocus({ dialogRef, initialFocusRef, onClose });
 
   const chooseFormat = (format: DownloadFormat) => {
     onDownload(format);
@@ -29,17 +26,30 @@ export function DownloadPanel({ locale, onDownload, onClose }: DownloadPanelProp
   };
 
   return (
-    <div className="settings-backdrop" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
-      <section className="settings-dialog download-dialog" role="dialog" aria-modal="true" aria-labelledby="download-title">
+    <div
+      className="settings-backdrop"
+      data-modal-root
+      onMouseDown={(event) => event.target === event.currentTarget && onClose()}
+    >
+      <section
+        ref={dialogRef}
+        className="settings-dialog download-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="download-title"
+        aria-describedby="download-description"
+        tabIndex={-1}
+      >
         <div className="settings-head">
           <div>
             <h2 id="download-title">{text.downloadTree}</h2>
-            <p>{text.downloadDescription}</p>
+            <p id="download-description">{text.downloadDescription}</p>
           </div>
           <button className="settings-close" type="button" onClick={onClose} aria-label={text.closeDownload}>×</button>
         </div>
         <div className="download-options">
           <DownloadOption
+            buttonRef={initialFocusRef}
             badge="PGN"
             title={text.downloadPgn}
             description={text.downloadPgnDescription}
@@ -64,15 +74,16 @@ export function DownloadPanel({ locale, onDownload, onClose }: DownloadPanelProp
 }
 
 type DownloadOptionProps = {
+  buttonRef?: RefObject<HTMLButtonElement | null>;
   badge: string;
   title: string;
   description: string;
   onClick: () => void;
 };
 
-function DownloadOption({ badge, title, description, onClick }: DownloadOptionProps) {
+function DownloadOption({ buttonRef, badge, title, description, onClick }: DownloadOptionProps) {
   return (
-    <button className="download-option" type="button" onClick={onClick}>
+    <button ref={buttonRef} className="download-option" type="button" onClick={onClick}>
       <span className="download-badge" aria-hidden="true">{badge}</span>
       <span className="download-copy">
         <strong>{title}</strong>
