@@ -6,7 +6,10 @@ import {
   promotionChoicesForMove,
   type PromotionPiece,
 } from "../features/explorer/services/boardMove";
-import { resolveSelectionAfterCollapse } from "../features/explorer/services/treeSelection";
+import {
+  resolveSelectionAfterCollapse,
+  revealSelectionAncestors,
+} from "../features/explorer/services/treeSelection";
 import type { TreeNode } from "../features/explorer/types";
 
 const promotionFen = "7k/4P3/8/8/8/8/8/K7 w - - 0 1";
@@ -103,4 +106,23 @@ test("preserves selection when the tree index is incomplete or cyclic", () => {
   assert.equal(resolveSelectionAfterCollapse(index, "orphan", "branch", true), "orphan");
   assert.equal(resolveSelectionAfterCollapse(index, "missing", "branch", true), "missing");
   assert.equal(resolveSelectionAfterCollapse(index, "cycle-a", "branch", true), "cycle-a");
+});
+
+test("reveals every collapsed ancestor before programmatic selection", () => {
+  const grandchild = treeNode("grandchild", "child");
+  const child = treeNode("child", "branch", [grandchild]);
+  const branch = treeNode("branch", "start", [child]);
+  const root = treeNode("start", null, [branch]);
+  const index = new Map([root, branch, child, grandchild].map((node) => [node.id, node]));
+  const collapsed = new Set(["start", "branch", "child", "unrelated"]);
+
+  assert.deepEqual(
+    revealSelectionAncestors(index, collapsed, "grandchild"),
+    new Set(["unrelated"]),
+  );
+  assert.equal(revealSelectionAncestors(index, collapsed, "start"), collapsed);
+  assert.deepEqual(
+    revealSelectionAncestors(index, collapsed, "new-child", "branch"),
+    new Set(["child", "unrelated"]),
+  );
 });

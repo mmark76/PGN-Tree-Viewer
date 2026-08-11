@@ -22,6 +22,8 @@ PGN and JSON files are processed locally in the browser and are not uploaded.
 
 ## Development
 
+Requires Node.js 22.13.0 or newer and npm.
+
 ```bash
 npm ci
 npm run dev
@@ -30,10 +32,17 @@ npm run dev
 ## Checks
 
 ```bash
-npm run lint
 npm test
+npm run lint
+npx tsc --noEmit
+npm audit --omit=dev --audit-level=high
 npm run build
+git diff --check
 ```
+
+`npm test` runs the TypeScript unit tests and mounted DOM/service tests. Pull requests
+and pushes to `main` run the same test, lint, TypeScript, production-dependency audit,
+production-build, and whitespace checks in GitHub Actions.
 
 ## Cloudflare Pages
 

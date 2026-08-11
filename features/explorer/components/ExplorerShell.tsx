@@ -48,7 +48,10 @@ import {
   readStoredLocale,
   storeLocale,
 } from "../services/localeStorage";
-import { resolveSelectionAfterCollapse } from "../services/treeSelection";
+import {
+  resolveSelectionAfterCollapse,
+  revealSelectionAncestors,
+} from "../services/treeSelection";
 import {
   isExplorerDataMutationLocked,
 } from "../services/explorerTaskLock";
@@ -373,6 +376,12 @@ export function ExplorerShell() {
     setContentDirty(false);
   };
 
+  const selectAndReveal = (id: string, fallbackParentId: string | null = null) => {
+    setCollapsedIds((current) =>
+      revealSelectionAncestors(index, current, id, fallbackParentId));
+    setSelectedId(id);
+  };
+
   const toggleBranch = (id: string) => {
     const isCollapsing = !collapsedIds.has(id);
     setSelectedId((current) => resolveSelectionAfterCollapse(index, current, id, isCollapsing));
@@ -457,13 +466,7 @@ export function ExplorerShell() {
   const appendBoardMove = (parent: TreeNode, played: PlayedBoardMove) => {
     const existing = parent.children.find((child) => child.san === played.san);
     if (existing) {
-      setSelectedId(existing.id);
-      setCollapsedIds((current) => {
-        if (!current.has(parent.id)) return current;
-        const next = new Set(current);
-        next.delete(parent.id);
-        return next;
-      });
+      selectAndReveal(existing.id, parent.id);
       return true;
     }
 
@@ -485,13 +488,7 @@ export function ExplorerShell() {
       setNoticeIsError(true);
       return false;
     }
-    setSelectedId(`${parent.id}-${moveKey}`);
-    setCollapsedIds((current) => {
-      if (!current.has(parent.id)) return current;
-      const next = new Set(current);
-      next.delete(parent.id);
-      return next;
-    });
+    selectAndReveal(`${parent.id}-${moveKey}`, parent.id);
     return true;
   };
 
@@ -677,7 +674,7 @@ export function ExplorerShell() {
               locale={locale}
               direction={settings.treeDirection}
               onZoomChange={setZoom}
-              onSelect={setSelectedId}
+              onSelect={selectAndReveal}
               onToggle={toggleBranch}
             />
           ) : (
@@ -691,8 +688,8 @@ export function ExplorerShell() {
           locale={locale}
           flipped={flipped}
           onFlip={() => setFlipped((value) => !value)}
-          onBack={() => selected.parentId && setSelectedId(selected.parentId)}
-          onForward={() => selected.children[0] && setSelectedId(selected.children[0].id)}
+          onBack={() => selected.parentId && selectAndReveal(selected.parentId)}
+          onForward={() => selected.children[0] && selectAndReveal(selected.children[0].id)}
           onMove={addMoveFromBoard}
           lightSquareColor={settings.lightSquareColor}
           darkSquareColor={settings.darkSquareColor}
