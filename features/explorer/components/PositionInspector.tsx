@@ -1,7 +1,12 @@
 import type { TreeNode } from "../types";
 import { ChessBoard } from "./ChessBoard";
-import { dominantOpening, resultCount } from "../services/treeBuilder";
-import { gamesLabel, messages } from "../i18n";
+import {
+  dominantOpening,
+  gameCount,
+  knownResultCount,
+  resultPercentages,
+} from "../services/treeBuilder";
+import { gamesLabel, knownResultsLabel, messages } from "../i18n";
 import type { Locale } from "../i18n";
 
 type PositionInspectorProps = {
@@ -21,10 +26,9 @@ type PositionInspectorProps = {
 
 export function PositionInspector({ node, path, hasData, locale, flipped, onFlip, onBack, onForward, onMove, lightSquareColor, darkSquareColor, sourceNote }: PositionInspectorProps) {
   const text = messages[locale];
-  const total = resultCount(node.results);
-  const white = total ? Math.round((node.results.white / total) * 100) : 0;
-  const draw = total ? Math.round((node.results.draw / total) * 100) : 0;
-  const black = total ? 100 - white - draw : 0;
+  const games = gameCount(node.results);
+  const knownResults = knownResultCount(node.results);
+  const { white, draw, black } = resultPercentages(node.results);
   const opening = dominantOpening(node);
 
   return (
@@ -48,22 +52,31 @@ export function PositionInspector({ node, path, hasData, locale, flipped, onFlip
       />
       {hasData ? (
         <>
-          {total ? (
+          {games ? (
             <div className="stats-card">
               <div className="stats-title">
                 <strong>{node.id === "start" ? text.initialPosition : node.san}</strong>
-                <span>{gamesLabel(locale, total)}</span>
+                <span>
+                  {gamesLabel(locale, games)}
+                  {node.results.unknown ? ` · ${knownResultsLabel(locale, knownResults)}` : ""}
+                </span>
               </div>
-              <div className="result-bar" aria-label={`${text.white} ${white}%, ${text.draw} ${draw}%, ${text.black} ${black}%`}>
-                <span style={{ width: `${white}%` }} />
-                <span style={{ width: `${draw}%` }} />
-                <span style={{ width: `${black}%` }} />
-              </div>
-              <div className="result-legend">
-                <div>{text.white}<strong>{white}%</strong></div>
-                <div>{text.draw}<strong>{draw}%</strong></div>
-                <div>{text.black}<strong>{black}%</strong></div>
-              </div>
+              {knownResults ? (
+                <>
+                  <div className="result-bar" aria-label={`${text.white} ${white}%, ${text.draw} ${draw}%, ${text.black} ${black}%`}>
+                    <span style={{ width: `${white}%` }} />
+                    <span style={{ width: `${draw}%` }} />
+                    <span style={{ width: `${black}%` }} />
+                  </div>
+                  <div className="result-legend">
+                    <div>{text.white}<strong>{white}%</strong></div>
+                    <div>{text.draw}<strong>{draw}%</strong></div>
+                    <div>{text.black}<strong>{black}%</strong></div>
+                  </div>
+                </>
+              ) : (
+                <p>{text.noKnownResults}</p>
+              )}
             </div>
           ) : (
             <div className="position-empty manual-position">
@@ -73,7 +86,7 @@ export function PositionInspector({ node, path, hasData, locale, flipped, onFlip
           )}
           <div className="path-card">
             <p>{opening === "__manual__" ? text.manualLine : opening}</p>
-            <div className="move-path">{formatPath(path) || text.chooseMove}</div>
+            <div className="move-path">{formatPath(path, node.ply - path.length) || text.chooseMove}</div>
           </div>
           {sourceNote && <div className="source-note"><span className="status-dot" /> {sourceNote}</div>}
         </>
@@ -87,9 +100,14 @@ export function PositionInspector({ node, path, hasData, locale, flipped, onFlip
   );
 }
 
-function formatPath(path: string[]) {
-  return path.reduce((text, move, index) => {
-    const moveNumber = Math.floor(index / 2) + 1;
-    return `${text}${index % 2 === 0 ? `${moveNumber}. ` : ""}${move}${index % 2 === 1 ? "  " : " "}`;
-  }, "").trim();
+function formatPath(path: string[], startPly: number) {
+  const tokens: string[] = [];
+  path.forEach((move, index) => {
+    const ply = startPly + index;
+    const moveNumber = Math.floor(ply / 2) + 1;
+    if (ply % 2 === 0) tokens.push(`${moveNumber}.`);
+    else if (index === 0) tokens.push(`${moveNumber}...`);
+    tokens.push(move);
+  });
+  return tokens.join(" ");
 }

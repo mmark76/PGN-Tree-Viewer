@@ -1,19 +1,21 @@
 import { Chess } from "chess.js";
 import type { LineRecord, ResultTotals, TreeNode } from "../types";
+import {
+  addResults,
+  assertAggregateTotalsSafe,
+  assertSingleStartFen,
+  checkedAddNonNegativeIntegers,
+  emptyResults,
+  gameCount,
+  startPlyFromFen,
+} from "./lineIntegrity";
 
-const emptyResults = (): ResultTotals => ({ white: 0, draw: 0, black: 0 });
+export { gameCount, knownResultCount, resultPercentages } from "./lineIntegrity";
 
-const addResults = (target: ResultTotals, source: ResultTotals) => {
-  target.white += source.white;
-  target.draw += source.draw;
-  target.black += source.black;
-};
-
-export const resultCount = (results: ResultTotals) =>
-  results.white + results.draw + results.black;
+export const resultCount = gameCount;
 
 export function popularityPercentage(results: ResultTotals, parentCount: number) {
-  const total = resultCount(results);
+  const total = gameCount(results);
   if (!total || !parentCount) return null;
   return Math.round((total / parentCount) * 100);
 }
@@ -23,25 +25,30 @@ export function dominantOpening(node: TreeNode) {
 }
 
 export function buildTree(lines: LineRecord[]): TreeNode {
-  const chess = new Chess();
+  const startFen = assertSingleStartFen(lines);
+  assertAggregateTotalsSafe(lines);
+  const chess = new Chess(startFen);
   const root: TreeNode = {
     id: "start",
     san: "Αρχική θέση",
-    ply: 0,
+    ply: startPlyFromFen(startFen),
     fen: chess.fen(),
     parentId: null,
     move: null,
     results: emptyResults(),
-    openingTotals: {},
+    openingTotals: Object.create(null) as Record<string, number>,
     children: [],
   };
 
   for (const line of lines) {
-    chess.reset();
+    chess.load(startFen);
     let parent = root;
-    const lineCount = resultCount(line.results);
+    const lineCount = gameCount(line.results);
     addResults(root.results, line.results);
-    root.openingTotals[line.opening] = (root.openingTotals[line.opening] ?? 0) + lineCount;
+    root.openingTotals[line.opening] = checkedAddNonNegativeIntegers(
+      root.openingTotals[line.opening] ?? 0,
+      lineCount,
+    );
 
     for (const moveText of line.moves) {
       const played = chess.move(moveText);
@@ -53,19 +60,22 @@ export function buildTree(lines: LineRecord[]): TreeNode {
         child = {
           id: `${parent.id}-${moveKey}`,
           san: played.san,
-          ply: parent.ply + 1,
+          ply: checkedAddNonNegativeIntegers(parent.ply, 1),
           fen: chess.fen(),
           parentId: parent.id,
           move: { from: played.from, to: played.to },
           results: emptyResults(),
-          openingTotals: {},
+          openingTotals: Object.create(null) as Record<string, number>,
           children: [],
         };
         parent.children.push(child);
       }
 
       addResults(child.results, line.results);
-      child.openingTotals[line.opening] = (child.openingTotals[line.opening] ?? 0) + lineCount;
+      child.openingTotals[line.opening] = checkedAddNonNegativeIntegers(
+        child.openingTotals[line.opening] ?? 0,
+        lineCount,
+      );
       parent = child;
     }
   }
@@ -75,7 +85,7 @@ export function buildTree(lines: LineRecord[]): TreeNode {
 }
 
 function sortTree(node: TreeNode) {
-  node.children.sort((a, b) => resultCount(b.results) - resultCount(a.results));
+  node.children.sort((a, b) => gameCount(b.results) - gameCount(a.results));
   node.children.forEach(sortTree);
 }
 

@@ -2,7 +2,14 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { parsePgnCollection } from "../features/explorer/services/pgnParser";
 import { buildTree, popularityPercentage, resultCount } from "../features/explorer/services/treeBuilder";
-import { DEFAULT_LOCALE, firstMovesLabel, gamesLabel, importSuccess, messages } from "../features/explorer/i18n";
+import {
+  DEFAULT_LOCALE,
+  firstMovesLabel,
+  gamesLabel,
+  importSuccess,
+  knownResultsLabel,
+  messages,
+} from "../features/explorer/i18n";
 import { playBoardMove } from "../features/explorer/services/boardMove";
 import { Chess } from "chess.js";
 import { DEFAULT_SETTINGS, normalizeSettings } from "../features/explorer/settings";
@@ -17,6 +24,25 @@ import {
   serializeTreeToPgn,
   serializeTreeToSvg,
 } from "../features/explorer/services/treeFiles";
+import {
+  gameCount,
+  knownResultCount,
+  LineIntegrityError,
+  resultPercentages,
+} from "../features/explorer/services/lineIntegrity";
+
+const standardStartFen = new Chess().fen();
+const blackToMoveFen = "8/8/8/8/8/8/5K2/7k b - - 0 37";
+const alternateBlackToMoveFen = "8/8/8/8/8/8/4K3/7k b - - 0 37";
+const initialBoardBlackToMoveFen =
+  "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b KQkq - 0 7";
+
+const expectIntegrityCode = (code: "mixed-start-fen" | "unsafe-integer") =>
+  (error: unknown) => {
+    assert.ok(error instanceof LineIntegrityError);
+    assert.equal(error.code, code);
+    return true;
+  };
 
 const collection = `[Event "Game one"]
 [Result "1-0"]
@@ -44,6 +70,8 @@ test("provides Greek and English count labels", () => {
   assert.equal(firstMovesLabel("en", 1), "1 first move");
   assert.equal(importSuccess("el", 1, 0), "1 παρτίδα εισήχθη.");
   assert.equal(importSuccess("en", 2, 1), "2 games imported · 1 skipped.");
+  assert.equal(knownResultsLabel("en", 1), "W/D/L from 1 known result");
+  assert.equal(knownResultsLabel("el", 2), "W/D/L από 2 γνωστά αποτελέσματα");
 });
 
 test("uses English as the default interface language", () => {
@@ -55,8 +83,9 @@ test("builds a manual branch without game statistics", () => {
   const tree = buildTree([
     {
       moves: ["e4", "c5", "Nf3"],
+      startFen: standardStartFen,
       opening: "__manual__",
-      results: { white: 0, draw: 0, black: 0 },
+      results: { white: 0, draw: 0, black: 0, unknown: 0 },
     },
   ]);
 
@@ -68,9 +97,9 @@ test("builds a manual branch without game statistics", () => {
 });
 
 test("shows popularity only when PGN statistics exist", () => {
-  assert.equal(popularityPercentage({ white: 3, draw: 1, black: 1 }, 10), 50);
-  assert.equal(popularityPercentage({ white: 0, draw: 0, black: 0 }, 10), null);
-  assert.equal(popularityPercentage({ white: 1, draw: 0, black: 0 }, 0), null);
+  assert.equal(popularityPercentage({ white: 3, draw: 1, black: 1, unknown: 0 }, 10), 50);
+  assert.equal(popularityPercentage({ white: 0, draw: 0, black: 0, unknown: 0 }, 10), null);
+  assert.equal(popularityPercentage({ white: 1, draw: 0, black: 0, unknown: 0 }, 0), null);
 });
 
 test("accepts legal board moves and rejects illegal ones", () => {
@@ -118,7 +147,17 @@ test("parses multiple PGN games and preserves results", () => {
   assert.equal(parsed.gameCount, 2);
   assert.equal(parsed.skippedCount, 0);
   assert.deepEqual(parsed.lines[0].moves, ["c4", "Nf6", "Nc3", "e5"]);
-  assert.deepEqual(parsed.lines[1].results, { white: 0, draw: 0, black: 1 });
+  assert.deepEqual(parsed.lines[1].results, { white: 0, draw: 0, black: 1, unknown: 0 });
+});
+
+test("treats prototype-like opening names as ordinary data", () => {
+  const parsed = parsePgnCollection(`[Opening "__proto__"]
+[Result "*"]
+
+1. e4 *`);
+
+  assert.doesNotThrow(() => buildTree(parsed.lines));
+  assert.equal(buildTree(parsed.lines).openingTotals.__proto__, 1);
 });
 
 test("merges shared moves into one statistical tree", () => {
@@ -233,8 +272,9 @@ test("preserves nested PGN variations as separate tree lines", () => {
     ]);
     const tree = buildTree(result.lines.map((moves) => ({
       moves,
+      startFen: standardStartFen,
       opening: "__manual__",
-      results: { white: 0, draw: 0, black: 0 },
+      results: { white: 0, draw: 0, black: 0, unknown: 0 },
     })));
     const e4 = tree.children.find((node) => node.san === "e4")!;
     assert.deepEqual(e4.children.map((node) => node.san), ["e5", "c5"]);
@@ -281,4 +321,337 @@ test("marks uncommitted builds as dirty", () => {
 
   assert.equal(clean, "version_20260810_1846_commit_abcdef0");
   assert.equal(dirty, "version_20260810_1846_commit_abcdef0_dirty");
+});
+
+test("parses and builds a PGN that starts from a custom FEN", () => {
+  const pgn = `[Event "Custom endgame"]
+[SetUp "1"]
+[FEN "${blackToMoveFen}"]
+[Result "*"]
+
+37... Kh2 38. Kf3 *`;
+  const parsed = parsePgnCollection(pgn);
+
+  assert.equal(parsed.gameCount, 1);
+  assert.equal(parsed.skippedCount, 0);
+  assert.equal(parsed.lines[0].startFen, blackToMoveFen);
+  assert.deepEqual(parsed.lines[0].moves, ["Kh2", "Kf3"]);
+  assert.deepEqual(parsed.lines[0].results, { white: 0, draw: 0, black: 0, unknown: 1 });
+
+  const tree = buildTree(parsed.lines);
+  assert.equal(tree.fen, blackToMoveFen);
+  assert.equal(tree.children[0].san, "Kh2");
+  assert.equal(tree.children[0].children[0].san, "Kf3");
+  assert.equal(resultCount(tree.results), 1);
+});
+
+test("exports a black-to-move custom FEN with its absolute move numbers", () => {
+  const parsed = parsePgnCollection(`[Event "Custom endgame"]
+[SetUp "1"]
+[FEN "${blackToMoveFen}"]
+[Result "*"]
+
+37... Kh2 38. Kf3 *`);
+  const exported = serializeTreeToPgn(buildTree(parsed.lines));
+
+  assert.match(exported, /^\[SetUp "1"\]$/m);
+  assert.ok(exported.includes(`[FEN "${blackToMoveFen}"]`));
+  assert.match(exported, /37\.\.\. Kh2/);
+  assert.match(exported, /38\. Kf3/);
+  assert.doesNotThrow(() => new Chess().loadPgn(exported, { strict: false }));
+
+  const reparsed = parsePgnCollection(exported);
+  assert.equal(reparsed.lines[0].startFen, blackToMoveFen);
+  assert.deepEqual(reparsed.lines[0].moves, ["Kh2", "Kf3"]);
+});
+
+test("omits SetUp and FEN headers for a standard-start export", () => {
+  const exported = serializeTreeToPgn(buildTree(parsePgnCollection(collection).lines));
+
+  assert.doesNotMatch(exported, /^\[SetUp /m);
+  assert.doesNotMatch(exported, /^\[FEN /m);
+  assert.doesNotThrow(() => new Chess().loadPgn(exported, { strict: false }));
+});
+
+test("round-trips start FEN and unknown results in the current JSON format", () => {
+  const lines = parsePgnCollection(`[Event "Custom JSON"]
+[SetUp "1"]
+[FEN "${blackToMoveFen}"]
+[Result "*"]
+
+37... Kh2 38. Kf3 *`).lines;
+  const json = serializeChessTreeJson(lines, DEFAULT_SETTINGS, "custom.pgn");
+  const restored = parseChessTreeJson(json);
+
+  assert.match(json, /"startFen"/);
+  assert.match(json, /"unknown": 1/);
+  assert.deepEqual(restored.lines, lines);
+});
+
+test("loads legacy JSON without startFen or unknown fields", () => {
+  const current = JSON.parse(serializeChessTreeJson(
+    [{
+      startFen: standardStartFen,
+      moves: ["e4", "e5"],
+      opening: "Legacy line",
+      results: { white: 1, draw: 0, black: 0, unknown: 0 },
+    }],
+    DEFAULT_SETTINGS,
+    "legacy.pgn",
+  )) as { lines: Array<Record<string, unknown>> };
+  delete current.lines[0].startFen;
+  const legacyResults = current.lines[0].results as Record<string, unknown>;
+  delete legacyResults.unknown;
+
+  const restored = parseChessTreeJson(JSON.stringify(current));
+  assert.equal(restored.lines[0].startFen, standardStartFen);
+  assert.deepEqual(restored.lines[0].results, { white: 1, draw: 0, black: 0, unknown: 0 });
+});
+
+test("reads a pasted FEN PGN and preserves recursive variations", () => {
+  const pastedPgn = `[Event "Black alternatives"]
+[SetUp "1"]
+[FEN "${initialBoardBlackToMoveFen}"]
+[Result "*"]
+
+7... c5 (7... e5 8. Nf3 (8. Nc3) Nc6) 8. Nf3 d6 *`;
+  const result = validateSanSequence(pastedPgn);
+
+  assert.equal(result.valid, true);
+  if (result.valid) {
+    assert.equal(result.startFen, initialBoardBlackToMoveFen);
+    assert.deepEqual(result.moves, ["c5", "Nf3", "d6"]);
+    assert.deepEqual(result.lines, [
+      ["c5", "Nf3", "d6"],
+      ["e5", "Nf3", "Nc6"],
+      ["e5", "Nc3"],
+    ]);
+
+    const tree = buildTree(result.lines.map((moves) => ({
+      startFen: result.startFen,
+      moves,
+      opening: "__manual__",
+      results: { white: 0, draw: 0, black: 0, unknown: 0 },
+    })));
+    assert.equal(tree.fen, initialBoardBlackToMoveFen);
+    assert.deepEqual(tree.children.map((node) => node.san), ["c5", "e5"]);
+  }
+});
+
+test("rejects a pasted FEN that differs from the selected position", () => {
+  const pastedPgn = `[SetUp "1"]
+[FEN "${initialBoardBlackToMoveFen}"]
+[Result "*"]
+
+7... c5 *`;
+  const result = validateSanSequence(pastedPgn, standardStartFen);
+
+  assert.equal(result.valid, false);
+  if (!result.valid) assert.equal(result.errorCode, "start-position-mismatch");
+});
+
+test("rejects pasted FEN move numbers that would overflow the tree ply", () => {
+  const result = validateSanSequence(`[SetUp "1"]
+[FEN "8/8/8/8/8/8/5K2/7k b - - 0 4503599627370495"]
+
+Kh2 Kf3 Kh3`);
+
+  assert.equal(result.valid, false);
+  if (!result.valid) assert.equal(result.errorCode, "unsafe-integer");
+});
+
+test("accepts games with the same normalized start and rejects mixed starts", () => {
+  const sameStart = `[Event "First"]
+[SetUp "1"]
+[FEN "${blackToMoveFen}"]
+[Result "1-0"]
+
+37... Kh2 38. Kf3 1-0
+
+[Event "Second"]
+[SetUp "1"]
+[FEN "${blackToMoveFen}"]
+[Result "1/2-1/2"]
+
+37... Kh2 38. Kf3 1/2-1/2`;
+  const parsed = parsePgnCollection(sameStart);
+
+  assert.equal(parsed.gameCount, 2);
+  assert.equal(buildTree(parsed.lines).fen, blackToMoveFen);
+
+  const mixedStarts = `${sameStart}
+
+[Event "Different start"]
+[SetUp "1"]
+[FEN "${alternateBlackToMoveFen}"]
+[Result "*"]
+
+37... Kh2 38. Kf3 *`;
+  assert.throws(() => parsePgnCollection(mixedStarts), expectIntegrityCode("mixed-start-fen"));
+  assert.throws(
+    () => buildTree([
+      parsed.lines[0],
+      { ...parsed.lines[1], startFen: alternateBlackToMoveFen },
+    ]),
+    expectIntegrityCode("mixed-start-fen"),
+  );
+});
+
+test("splits a PGN collection without Event headers", () => {
+  const noEventHeaders = `[Site "First"]
+[Result "1-0"]
+
+1. e4 e5 1-0
+
+[Site "Second"]
+[Result "0-1"]
+
+1. d4 d5 0-1`;
+  const parsed = parsePgnCollection(noEventHeaders);
+
+  assert.equal(parsed.gameCount, 2);
+  assert.equal(parsed.skippedCount, 0);
+  assert.deepEqual(parsed.lines.map((line) => line.moves), [["e4", "e5"], ["d4", "d5"]]);
+});
+
+test("splits headerless games at top-level result markers", () => {
+  const parsed = parsePgnCollection(`1. e4 e5 1-0
+1. d4 d5 0-1`);
+
+  assert.equal(parsed.gameCount, 2);
+  assert.equal(parsed.skippedCount, 0);
+  assert.deepEqual(parsed.lines.map((line) => line.moves), [["e4", "e5"], ["d4", "d5"]]);
+  assert.deepEqual(parsed.lines.map((line) => line.results), [
+    { white: 1, draw: 0, black: 0, unknown: 0 },
+    { white: 0, draw: 0, black: 1, unknown: 0 },
+  ]);
+});
+
+test("counts only the exact draw marker as a draw", () => {
+  const exactDraw = parsePgnCollection(`[Event "Draw"]
+[Result "1/2-1/2"]
+
+1. e4 e5 1/2-1/2`).lines[0].results;
+  const ongoing = parsePgnCollection(`[Event "Ongoing"]
+[Result "*"]
+
+1. d4 d5 *`).lines[0].results;
+  const missing = parsePgnCollection(`[Event "Missing"]
+
+1. Nf3 d5`).lines[0].results;
+  const unrecognized = parsePgnCollection(`[Event "Abandoned"]
+[Result "abandoned"]
+
+1. c4 e5`).lines[0].results;
+
+  assert.deepEqual(exactDraw, { white: 0, draw: 1, black: 0, unknown: 0 });
+  assert.deepEqual(ongoing, { white: 0, draw: 0, black: 0, unknown: 1 });
+  assert.deepEqual(missing, { white: 0, draw: 0, black: 0, unknown: 1 });
+  assert.deepEqual(unrecognized, { white: 0, draw: 0, black: 0, unknown: 1 });
+});
+
+test("separates game counts from known-result percentages", () => {
+  const results = { white: 101, draw: 99, black: 0, unknown: 200 };
+
+  assert.equal(gameCount(results), 400);
+  assert.equal(resultCount(results), 400);
+  assert.equal(knownResultCount(results), 200);
+  assert.deepEqual(resultPercentages(results), { white: 51, draw: 49, black: 0 });
+  assert.deepEqual(
+    resultPercentages({ white: 0, draw: 0, black: 0, unknown: 10 }),
+    { white: 0, draw: 0, black: 0 },
+  );
+  assert.equal(popularityPercentage({ white: 0, draw: 0, black: 0, unknown: 1 }, 2), 50);
+});
+
+test("rejects a single line whose result total exceeds the safe-integer range", () => {
+  const lines = [{
+    startFen: standardStartFen,
+    moves: ["e4"],
+    opening: "Overflow",
+    results: {
+      white: Number.MAX_SAFE_INTEGER,
+      draw: 1,
+      black: 0,
+      unknown: 0,
+    },
+  }];
+  const json = JSON.stringify({
+    format: "chesstree",
+    version: 1,
+    sourceFileName: "overflow.pgn",
+    lines,
+    settings: DEFAULT_SETTINGS,
+  });
+
+  assert.throws(
+    () => serializeChessTreeJson(lines, DEFAULT_SETTINGS, "overflow.pgn"),
+    expectIntegrityCode("unsafe-integer"),
+  );
+  assert.throws(() => parseChessTreeJson(json), expectIntegrityCode("unsafe-integer"));
+  assert.throws(() => buildTree(lines), expectIntegrityCode("unsafe-integer"));
+});
+
+test("rejects safe line counters whose cross-line aggregate overflows", () => {
+  const lines = [
+    {
+      startFen: standardStartFen,
+      moves: ["e4"],
+      opening: "First",
+      results: {
+        white: Number.MAX_SAFE_INTEGER,
+        draw: 0,
+        black: 0,
+        unknown: 0,
+      },
+    },
+    {
+      startFen: standardStartFen,
+      moves: ["d4"],
+      opening: "Second",
+      results: { white: 1, draw: 0, black: 0, unknown: 0 },
+    },
+  ];
+  const json = JSON.stringify({
+    format: "chesstree",
+    version: 1,
+    sourceFileName: "aggregate-overflow.pgn",
+    lines,
+    settings: DEFAULT_SETTINGS,
+  });
+
+  assert.throws(
+    () => serializeChessTreeJson(lines, DEFAULT_SETTINGS, "aggregate-overflow.pgn"),
+    expectIntegrityCode("unsafe-integer"),
+  );
+  assert.throws(() => parseChessTreeJson(json), expectIntegrityCode("unsafe-integer"));
+  assert.throws(() => buildTree(lines), expectIntegrityCode("unsafe-integer"));
+});
+
+test("rejects cross-line totals that overflow across different result buckets", () => {
+  const lines = [
+    {
+      startFen: standardStartFen,
+      moves: ["e4"],
+      opening: "White total",
+      results: {
+        white: Number.MAX_SAFE_INTEGER,
+        draw: 0,
+        black: 0,
+        unknown: 0,
+      },
+    },
+    {
+      startFen: standardStartFen,
+      moves: ["d4"],
+      opening: "Draw total",
+      results: { white: 0, draw: 1, black: 0, unknown: 0 },
+    },
+  ];
+
+  assert.throws(
+    () => serializeChessTreeJson(lines, DEFAULT_SETTINGS, "cross-bucket-overflow.pgn"),
+    expectIntegrityCode("unsafe-integer"),
+  );
+  assert.throws(() => buildTree(lines), expectIntegrityCode("unsafe-integer"));
 });

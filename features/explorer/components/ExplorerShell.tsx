@@ -2,9 +2,10 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ChangeEvent, CSSProperties } from "react";
+import { DEFAULT_POSITION } from "chess.js";
 import { DEFAULT_LOCALE, firstMovesLabel, gamesLabel, importSuccess, messages } from "../i18n";
 import type { Locale } from "../i18n";
-import { buildTree, indexTree, pathToNode, resultCount } from "../services/treeBuilder";
+import { buildTree, gameCount, indexTree, pathToNode } from "../services/treeBuilder";
 import { parsePgnCollection } from "../services/pgnParser";
 import { playBoardMove } from "../services/boardMove";
 import { MAX_TREE_ZOOM, MIN_TREE_ZOOM } from "../services/treeLayout";
@@ -119,7 +120,14 @@ export function ExplorerShell() {
       setTreeViewMode("smart");
       setFitRequest((value) => value + 1);
     } catch (error) {
-      setNotice(isJson ? text.invalidTreeFile : error instanceof Error ? error.message : text.readFailed);
+      const code = error && typeof error === "object" && "code" in error
+        ? String(error.code)
+        : "";
+      if (code === "invalid-start-fen") setNotice(text.invalidFen);
+      else if (code === "mixed-start-fen") setNotice(text.mixedStartPositions);
+      else if (code === "invalid-results") setNotice(text.invalidResults);
+      else if (code === "unsafe-integer") setNotice(text.unsafeTotals);
+      else setNotice(isJson ? text.invalidTreeFile : error instanceof Error ? error.message : text.readFailed);
     } finally {
       setImporting(false);
       event.target.value = "";
@@ -179,7 +187,8 @@ export function ExplorerShell() {
       {
         moves,
         opening: "__manual__",
-        results: { white: 0, draw: 0, black: 0 },
+        results: { white: 0, draw: 0, black: 0, unknown: 0 },
+        startFen: tree.fen,
       },
     ]);
     setSelectedId(`${selected.id}-${moveKey}`);
@@ -200,7 +209,8 @@ export function ExplorerShell() {
       ...sanLines.map((moves) => ({
         moves: [...prefix, ...moves],
         opening: "__manual__",
-        results: { white: 0, draw: 0, black: 0 },
+        results: { white: 0, draw: 0, black: 0, unknown: 0 },
+        startFen: tree.fen,
       })),
     ]);
     setCollapsedIds(new Set());
@@ -208,11 +218,12 @@ export function ExplorerShell() {
     setNotice(text.sanAdded);
   };
 
-  const replaceWithSan = (sanLines: string[][]) => {
+  const replaceWithSan = (sanLines: string[][], startFen: string) => {
     setLines(sanLines.map((moves) => ({
       moves,
       opening: "__manual__",
-      results: { white: 0, draw: 0, black: 0 },
+      results: { white: 0, draw: 0, black: 0, unknown: 0 },
+      startFen,
     })));
     setFileName("");
     setSelectedId("start");
@@ -259,7 +270,7 @@ export function ExplorerShell() {
             {hasTree ? (
               <div className="tree-tools">
                 <span className="tree-summary">
-                  {resultCount(tree.results) ? `${gamesLabel(locale, resultCount(tree.results))} · ` : ""}
+                  {gameCount(tree.results) ? `${gamesLabel(locale, gameCount(tree.results))} · ` : ""}
                   {firstMovesLabel(locale, tree.children.length)}
                 </span>
                 <button className="icon-button" type="button" onClick={() => changeZoom(-0.1)} aria-label={text.zoomOut}>−</button>
@@ -293,7 +304,16 @@ export function ExplorerShell() {
               </button>
             )}
           </div>
-          {notice && <div className={`notice${notice === text.noValidMoves || notice === text.invalidTreeFile || notice === text.fileTooLarge || notice === text.readFailed ? " error" : ""}`} role="status">{notice}</div>}
+          {notice && <div className={`notice${new Set<string>([
+            text.noValidMoves,
+            text.invalidTreeFile,
+            text.fileTooLarge,
+            text.readFailed,
+            text.invalidFen,
+            text.mixedStartPositions,
+            text.invalidResults,
+            text.unsafeTotals,
+          ]).has(notice) ? " error" : ""}`} role="status">{notice}</div>}
           {hasTree ? (
             <MoveTree
               root={tree}
@@ -324,7 +344,7 @@ export function ExplorerShell() {
           onMove={addMoveFromBoard}
           lightSquareColor={settings.lightSquareColor}
           darkSquareColor={settings.darkSquareColor}
-          sourceNote={hasTree ? (fileName ? `${fileName} · ${gamesLabel(locale, resultCount(tree.results))}` : "") : text.waitingForPgn}
+          sourceNote={hasTree ? (fileName ? `${fileName} · ${gamesLabel(locale, gameCount(tree.results))}` : "") : text.waitingForPgn}
         />
       </main>
       <ExplorerFooter locale={locale} />
@@ -348,6 +368,7 @@ export function ExplorerShell() {
           locale={locale}
           selectedFen={selected.fen}
           selectedLabel={selected.id === "start" ? text.initialPosition : selected.san}
+          selectedIsStandardRoot={selected.id === "start" && tree.fen === DEFAULT_POSITION}
           onAdd={addSanFromSelected}
           onReplace={replaceWithSan}
           onClose={() => setSanOpen(false)}

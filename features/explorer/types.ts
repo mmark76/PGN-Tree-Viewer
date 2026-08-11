@@ -2,12 +2,14 @@ export type ResultTotals = {
   white: number;
   draw: number;
   black: number;
+  unknown: number;
 };
 
 export type LineRecord = {
   moves: string[];
   opening: string;
   results: ResultTotals;
+  startFen: string;
 };
 
 export type MoveCoordinates = {

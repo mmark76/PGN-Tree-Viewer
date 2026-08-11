@@ -43,6 +43,8 @@ export const messages = {
     addFromHere: "Προσθήκη από εδώ",
     invalidSanMove: "Μη έγκυρη κίνηση στη θέση",
     emptySan: "Δεν βρέθηκαν έγκυρες κινήσεις.",
+    invalidFen: "Το FEN της αρχικής θέσης δεν είναι έγκυρο.",
+    startPositionMismatch: "Το FEN του PGN δεν ταιριάζει με την επιλεγμένη θέση.",
     validUntil: "Έγκυρες μέχρι εδώ",
     validSanMoves: "έγκυρες κινήσεις",
     treeLines: "γραμμές δέντρου",
@@ -74,6 +76,10 @@ export const messages = {
     fileTooLarge: "Το αρχείο είναι μεγαλύτερο από το όριο των 8 MB.",
     noValidMoves: "Δεν βρέθηκαν έγκυρες κινήσεις PGN.",
     invalidTreeFile: "Το αρχείο Chess Tree Builder JSON δεν είναι έγκυρο ή δεν υποστηρίζεται.",
+    mixedStartPositions: "Δεν μπορούν να συγχωνευτούν παρτίδες με διαφορετικές αρχικές θέσεις.",
+    invalidResults: "Τα αθροίσματα αποτελεσμάτων δεν είναι έγκυρα.",
+    unsafeTotals: "Ένα πλήθος ή ένας αριθμός κίνησης στο αρχείο υπερβαίνει το ασφαλές αριθμητικό όριο.",
+    unsafePosition: "Η επικολλημένη γραμμή υπερβαίνει το ασφαλές εύρος αρίθμησης κινήσεων αυτού του FEN.",
     treeImported: "Το δέντρο Chess Tree Builder εισήχθη επιτυχώς.",
     readFailed: "Το αρχείο δεν μπόρεσε να διαβαστεί.",
     emptyTreeArea: "Κενή περιοχή δέντρου κινήσεων",
@@ -94,6 +100,7 @@ export const messages = {
     flipBoard: "Περιστροφή σκακιέρας",
     manualLine: "Χειροκίνητη γραμμή",
     noStatistics: "Δεν υπάρχουν στατιστικά για χειροκίνητες κινήσεις.",
+    noKnownResults: "Δεν υπάρχουν αναγνωρισμένα αποτελέσματα νίκης, ισοπαλίας ή ήττας για αυτές τις παρτίδες.",
     moveAdded: "Η κίνηση προστέθηκε στο δέντρο.",
     privacy: "Τα αρχεία PGN και JSON επεξεργάζονται τοπικά σε αυτό το πρόγραμμα περιήγησης και δεν μεταφορτώνονται σε διακομιστή.",
     footerNavigation: "Σύνδεσμοι υποσέλιδου",
@@ -139,6 +146,8 @@ export const messages = {
     addFromHere: "Add from here",
     invalidSanMove: "Invalid move at position",
     emptySan: "No valid moves were found.",
+    invalidFen: "The starting-position FEN is invalid.",
+    startPositionMismatch: "The PGN FEN does not match the selected position.",
     validUntil: "Valid up to",
     validSanMoves: "valid moves",
     treeLines: "tree lines",
@@ -170,6 +179,10 @@ export const messages = {
     fileTooLarge: "The file exceeds the 8 MB limit.",
     noValidMoves: "No valid PGN moves were found.",
     invalidTreeFile: "The Chess Tree Builder JSON file is invalid or unsupported.",
+    mixedStartPositions: "Games with different starting positions cannot be merged.",
+    invalidResults: "The result totals are invalid.",
+    unsafeTotals: "A count or move number in this file exceeds the safe numeric limit.",
+    unsafePosition: "The pasted line exceeds the safe move-number range for this FEN.",
     treeImported: "The Chess Tree Builder file was imported successfully.",
     readFailed: "The file could not be read.",
     emptyTreeArea: "Empty move-tree area",
@@ -190,6 +203,7 @@ export const messages = {
     flipBoard: "Flip board",
     manualLine: "Manual line",
     noStatistics: "Statistics are not available for manual moves.",
+    noKnownResults: "These games have no recognized win, draw, or loss results.",
     moveAdded: "The move was added to the tree.",
     privacy: "PGN and JSON files are processed locally in this browser and are not uploaded to a server.",
     footerNavigation: "Footer links",
@@ -200,6 +214,13 @@ export const messages = {
 export function gamesLabel(locale: Locale, count: number) {
   if (locale === "el") return `${count} ${count === 1 ? "παρτίδα" : "παρτίδες"}`;
   return `${count} ${count === 1 ? "game" : "games"}`;
+}
+
+export function knownResultsLabel(locale: Locale, count: number) {
+  if (locale === "el") {
+    return `W/D/L από ${count} ${count === 1 ? "γνωστό αποτέλεσμα" : "γνωστά αποτελέσματα"}`;
+  }
+  return `W/D/L from ${count} known ${count === 1 ? "result" : "results"}`;
 }
 
 export function firstMovesLabel(locale: Locale, count: number) {

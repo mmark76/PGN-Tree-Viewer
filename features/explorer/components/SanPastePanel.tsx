@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useReducer, useRef, useState } from "react";
-import { Chess } from "chess.js";
 import { messages } from "../i18n";
 import type { Locale } from "../i18n";
 import { validateSanSequence } from "../services/sanParser";
@@ -12,12 +11,13 @@ type SanPastePanelProps = {
   locale: Locale;
   selectedFen: string;
   selectedLabel: string;
+  selectedIsStandardRoot: boolean;
   onAdd: (lines: string[][]) => void;
-  onReplace: (lines: string[][]) => void;
+  onReplace: (lines: string[][], startFen: string) => void;
   onClose: () => void;
 };
 
-export function SanPastePanel({ locale, selectedFen, selectedLabel, onAdd, onReplace, onClose }: SanPastePanelProps) {
+export function SanPastePanel({ locale, selectedFen, selectedLabel, selectedIsStandardRoot, onAdd, onReplace, onClose }: SanPastePanelProps) {
   const text = messages[locale];
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [state, dispatch] = useReducer(sanPasteReducer, undefined, createSanPasteState);
@@ -81,12 +81,15 @@ export function SanPastePanel({ locale, selectedFen, selectedLabel, onAdd, onRep
           </div>
           {clipboardError && <p className="san-message error" role="status">{text.clipboardFailed}</p>}
           {startResult && <ValidationSummary result={startResult} locale={locale} label={text.newTree} />}
-          {selectedResult && selectedFen !== new Chess().fen() && (
+          {selectedResult && (
+            !selectedIsStandardRoot
+            || (!selectedResult.valid && selectedResult.errorCode === "start-position-mismatch")
+          ) && (
             <ValidationSummary result={selectedResult} locale={locale} label={`${text.addFromHere}: ${selectedLabel}`} />
           )}
         </div>
         <div className="settings-footer san-footer">
-          <button className="button" type="button" disabled={!startResult?.valid} onClick={() => startResult?.valid && onReplace(startResult.lines)}>{text.newTree}</button>
+          <button className="button" type="button" disabled={!startResult?.valid} onClick={() => startResult?.valid && onReplace(startResult.lines, startResult.startFen)}>{text.newTree}</button>
           <button className="button primary" type="button" disabled={!selectedResult?.valid} onClick={() => selectedResult?.valid && onAdd(selectedResult.lines)}>{text.addFromHere}</button>
         </div>
       </section>
@@ -97,10 +100,19 @@ export function SanPastePanel({ locale, selectedFen, selectedLabel, onAdd, onRep
 function ValidationSummary({ result, locale, label }: { result: SanValidationResult; locale: Locale; label: string }) {
   const text = messages[locale];
   if (!result.valid) {
+    const errorMessage = result.errorCode === "invalid-fen"
+      ? text.invalidFen
+      : result.errorCode === "unsafe-integer"
+        ? text.unsafePosition
+        : result.errorCode === "start-position-mismatch"
+          ? text.startPositionMismatch
+          : result.invalidToken
+            ? `${text.invalidSanMove} ${result.tokenNumber}: “${result.invalidToken}”`
+            : text.emptySan;
     return (
       <div className="san-validation invalid" role="status">
         <strong>{label}</strong>
-        <span>{result.invalidToken ? `${text.invalidSanMove} ${result.tokenNumber}: “${result.invalidToken}”` : text.emptySan}</span>
+        <span>{errorMessage}</span>
         {result.moves.length > 0 && <small>{text.validUntil}: {result.moves.join(" ")}</small>}
       </div>
     );
