@@ -238,6 +238,13 @@ button {
   color: var(--forest);
 }
 
+.settings-button:disabled,
+.san-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+  transform: none;
+}
+
 .download-button:disabled {
   cursor: not-allowed;
   opacity: 0.48;
@@ -326,6 +333,58 @@ button {
 .upload-label.disabled {
   pointer-events: none;
   opacity: 0.65;
+}
+
+.import-status {
+  min-height: 40px;
+  display: grid;
+  grid-template-columns: minmax(92px, 1fr) auto;
+  grid-template-rows: auto 4px;
+  align-items: center;
+  gap: 3px 8px;
+  min-width: 210px;
+}
+
+.import-progress-label {
+  color: var(--forest-2);
+  font-size: calc(11px + var(--font-step));
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.import-progress {
+  grid-column: 1;
+  width: 100%;
+  height: 4px;
+  border: 0;
+  border-radius: 999px;
+  overflow: hidden;
+  accent-color: var(--forest);
+}
+
+.import-progress::-webkit-progress-bar {
+  background: #dfe5dd;
+}
+
+.import-progress::-webkit-progress-value {
+  background: var(--forest);
+}
+
+.import-progress::-moz-progress-bar {
+  background: var(--forest);
+}
+
+.san-build-progress {
+  width: 100%;
+  height: 6px;
+  accent-color: var(--forest);
+}
+
+.import-cancel {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  min-height: 36px;
+  padding-inline: 10px;
 }
 
 .file-input {
@@ -689,6 +748,16 @@ button {
   border-radius: 14px;
   background: #fffef9;
   box-shadow: 0 12px 30px rgba(25, 37, 30, 0.2);
+}
+
+.board-frame.is-disabled {
+  cursor: progress;
+  filter: saturate(0.65);
+  opacity: 0.58;
+}
+
+.board-frame.is-disabled > * {
+  pointer-events: none;
 }
 
 .board-flip {

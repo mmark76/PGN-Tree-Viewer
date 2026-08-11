@@ -16,6 +16,14 @@ import {
   normalizeStartFen,
   startPlyFromFen,
 } from "./lineIntegrity";
+import {
+  assertLineCollectionWithinLimits,
+  assertTextByteLengthWithinLimit,
+  assertWithinInputLimit,
+  type InputLimitOverrides,
+  type InputLimits,
+  resolveInputLimits,
+} from "./inputLimits";
 
 export const CHESSTREE_FILE_FORMAT = "chesstree";
 export const CHESSTREE_FILE_VERSION = 1;
@@ -26,6 +34,11 @@ export type ChessTreeFile = {
   sourceFileName: string | null;
   lines: LineRecord[];
   settings: ExplorerSettings;
+};
+
+export type ParseChessTreeJsonOptions = {
+  limits?: InputLimitOverrides;
+  deferMoveValidation?: boolean;
 };
 
 export function serializeChessTreeJson(
@@ -46,7 +59,12 @@ export function serializeChessTreeJson(
   return `${JSON.stringify(file, null, 2)}\n`;
 }
 
-export function parseChessTreeJson(content: string): ChessTreeFile {
+export function parseChessTreeJson(
+  content: string,
+  options: ParseChessTreeJsonOptions = {},
+): ChessTreeFile {
+  const limits = resolveInputLimits(options.limits);
+  assertTextByteLengthWithinLimit(content, "file-size", limits.maxFileBytes);
   const parsed: unknown = JSON.parse(content);
   if (!parsed || typeof parsed !== "object") throw new Error("Invalid ChessTree file");
 
@@ -54,11 +72,13 @@ export function parseChessTreeJson(content: string): ChessTreeFile {
   if (candidate.format !== CHESSTREE_FILE_FORMAT || candidate.version !== CHESSTREE_FILE_VERSION) {
     throw new Error("Unsupported ChessTree file");
   }
-  if (!Array.isArray(candidate.lines) || !candidate.lines.length || candidate.lines.length > 20_000) {
+  if (!Array.isArray(candidate.lines) || !candidate.lines.length) {
     throw new Error("Invalid ChessTree lines");
   }
+  preflightJsonLineBudgets(candidate.lines, limits);
 
-  const lines = candidate.lines.map(validateLine);
+  const lines = candidate.lines.map((line) => validateLine(line, options.deferMoveValidation));
+  assertLineCollectionWithinLimits(lines, limits);
   assertSingleStartFen(lines);
   assertAggregateTotalsSafe(lines);
 
@@ -71,10 +91,24 @@ export function parseChessTreeJson(content: string): ChessTreeFile {
   };
 }
 
-function validateLine(value: unknown): LineRecord {
+function preflightJsonLineBudgets(lines: unknown[], limits: InputLimits) {
+  assertWithinInputLimit("line-count", lines.length, limits.maxLines);
+  let totalPlies = 0;
+
+  for (const value of lines) {
+    if (!value || typeof value !== "object") throw new Error("Invalid ChessTree line");
+    const moves = (value as { moves?: unknown }).moves;
+    if (!Array.isArray(moves) || !moves.length) throw new Error("Invalid ChessTree moves");
+    assertWithinInputLimit("depth", moves.length, limits.maxDepth);
+    totalPlies += moves.length;
+    assertWithinInputLimit("total-plies", totalPlies, limits.maxTotalPlies);
+  }
+}
+
+function validateLine(value: unknown, deferMoveValidation = false): LineRecord {
   if (!value || typeof value !== "object") throw new Error("Invalid ChessTree line");
   const candidate = value as Partial<LineRecord>;
-  if (!Array.isArray(candidate.moves) || !candidate.moves.length || candidate.moves.length > 1_000) {
+  if (!Array.isArray(candidate.moves) || !candidate.moves.length) {
     throw new Error("Invalid ChessTree moves");
   }
 
@@ -91,12 +125,14 @@ function validateLine(value: unknown): LineRecord {
   }
   const startFen = normalizeStartFen(rawStartFen ?? DEFAULT_POSITION);
   checkedAddNonNegativeIntegers(startPlyFromFen(startFen), moves.length);
-  const chess = new Chess(startFen);
-  for (const move of moves) {
-    try {
-      if (!chess.move(move)) throw new Error("Illegal ChessTree move");
-    } catch {
-      throw new Error("Illegal ChessTree move");
+  if (!deferMoveValidation) {
+    const chess = new Chess(startFen);
+    for (const move of moves) {
+      try {
+        if (!chess.move(move)) throw new Error("Illegal ChessTree move");
+      } catch {
+        throw new Error("Illegal ChessTree move");
+      }
     }
   }
 

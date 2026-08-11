@@ -16,6 +16,7 @@ type ChessBoardProps = {
   darkSquareColor: string;
   onFlip: () => void;
   onMove: (from: string, to: string) => boolean;
+  disabled: boolean;
 };
 
 const notationStyle: CSSProperties = {
@@ -23,7 +24,7 @@ const notationStyle: CSSProperties = {
   fontWeight: 800,
 };
 
-export function ChessBoard({ fen, lastMove, flipped, locale, lightSquareColor, darkSquareColor, onFlip, onMove }: ChessBoardProps) {
+export function ChessBoard({ fen, lastMove, flipped, locale, lightSquareColor, darkSquareColor, onFlip, onMove, disabled }: ChessBoardProps) {
   const text = messages[locale];
   const [selection, setSelection] = useState<{ fen: string; square: string } | null>(null);
   const selectedSquare = selection?.fen === fen ? selection.square : null;
@@ -47,6 +48,7 @@ export function ChessBoard({ fen, lastMove, flipped, locale, lightSquareColor, d
   }
 
   const tryMove = (from: string, to: string) => {
+    if (disabled) return false;
     const moved = onMove(from, to);
     if (moved) setSelection(null);
     return moved;
@@ -54,13 +56,17 @@ export function ChessBoard({ fen, lastMove, flipped, locale, lightSquareColor, d
 
   return (
     <div className="board-wrap">
-      <div className="board-frame" aria-label={text.currentBoard}>
+      <div
+        className={`board-frame${disabled ? " is-disabled" : ""}`}
+        aria-label={text.currentBoard}
+        aria-disabled={disabled || undefined}
+      >
         <Chessboard
           options={{
             id: "chesstree-position-board",
             position: fen,
             boardOrientation: flipped ? "black" : "white",
-            allowDragging: true,
+            allowDragging: !disabled,
             allowDrawingArrows: false,
             showNotation: true,
             showAnimations: true,
@@ -69,6 +75,7 @@ export function ChessBoard({ fen, lastMove, flipped, locale, lightSquareColor, d
             onPieceDrop: ({ sourceSquare, targetSquare }) =>
               targetSquare ? tryMove(sourceSquare, targetSquare) : false,
             onSquareClick: ({ piece, square }) => {
+              if (disabled) return;
               if (selectedSquare) {
                 if (square === selectedSquare) {
                   setSelection(null);

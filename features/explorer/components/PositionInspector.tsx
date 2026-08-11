@@ -22,9 +22,10 @@ type PositionInspectorProps = {
   lightSquareColor: string;
   darkSquareColor: string;
   sourceNote?: string;
+  editingDisabled: boolean;
 };
 
-export function PositionInspector({ node, path, hasData, locale, flipped, onFlip, onBack, onForward, onMove, lightSquareColor, darkSquareColor, sourceNote }: PositionInspectorProps) {
+export function PositionInspector({ node, path, hasData, locale, flipped, onFlip, onBack, onForward, onMove, lightSquareColor, darkSquareColor, sourceNote, editingDisabled }: PositionInspectorProps) {
   const text = messages[locale];
   const games = gameCount(node.results);
   const knownResults = knownResultCount(node.results);
@@ -49,6 +50,7 @@ export function PositionInspector({ node, path, hasData, locale, flipped, onFlip
         darkSquareColor={darkSquareColor}
         onFlip={onFlip}
         onMove={onMove}
+        disabled={editingDisabled}
       />
       {hasData ? (
         <>

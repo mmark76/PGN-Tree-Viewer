@@ -4,15 +4,30 @@ import type { Locale } from "../i18n";
 type ExplorerHeaderProps = {
   sourceLabel: string;
   importing: boolean;
+  importProgress: number;
+  importProgressLabel: string;
   locale: Locale;
   downloadDisabled: boolean;
   onLocaleChange: (locale: Locale) => void;
+  onCancelImport: () => void;
   onOpenDownload: () => void;
   onOpenSan: () => void;
   onOpenSettings: () => void;
 };
 
-export function ExplorerHeader({ sourceLabel, importing, locale, downloadDisabled, onLocaleChange, onOpenDownload, onOpenSan, onOpenSettings }: ExplorerHeaderProps) {
+export function ExplorerHeader({
+  sourceLabel,
+  importing,
+  importProgress,
+  importProgressLabel,
+  locale,
+  downloadDisabled,
+  onLocaleChange,
+  onCancelImport,
+  onOpenDownload,
+  onOpenSan,
+  onOpenSettings,
+}: ExplorerHeaderProps) {
   const text = messages[locale];
 
   return (
@@ -31,11 +46,11 @@ export function ExplorerHeader({ sourceLabel, importing, locale, downloadDisable
 
         <div className="header-actions">
           <span className="local-badge"><span aria-hidden="true" /> {text.localPgn}</span>
-          <button className="button settings-button" type="button" onClick={onOpenSettings}>
+          <button className="button settings-button" type="button" onClick={onOpenSettings} disabled={importing}>
             <span aria-hidden="true">⚙</span>
             {text.settings}
           </button>
-          <button className="button san-button" type="button" onClick={onOpenSan}>
+          <button className="button san-button" type="button" onClick={onOpenSan} disabled={importing}>
             <span aria-hidden="true">▣</span>
             {text.pasteSan}
           </button>
@@ -47,10 +62,25 @@ export function ExplorerHeader({ sourceLabel, importing, locale, downloadDisable
             <button className={locale === "el" ? "active" : ""} type="button" aria-pressed={locale === "el"} onClick={() => onLocaleChange("el")}>GR</button>
             <button className={locale === "en" ? "active" : ""} type="button" aria-pressed={locale === "en"} onClick={() => onLocaleChange("en")}>EN</button>
           </div>
-          <label className={`button primary upload-label${importing ? " disabled" : ""}`} htmlFor="tree-file">
-            <span aria-hidden="true">↑</span>
-            <span>{importing ? text.reading : text.importPgn}</span>
-          </label>
+          {importing ? (
+            <div className="import-status">
+              <span className="import-progress-label">{importProgressLabel}</span>
+              <progress
+                className="import-progress"
+                max="100"
+                value={importProgress}
+                aria-label={importProgressLabel}
+              />
+              <button className="button import-cancel" type="button" onClick={onCancelImport}>
+                {text.cancelImport}
+              </button>
+            </div>
+          ) : (
+            <label className="button primary upload-label" htmlFor="tree-file">
+              <span aria-hidden="true">↑</span>
+              <span>{text.importPgn}</span>
+            </label>
+          )}
           <a className="ecosystem-link" href="https://markellosecosystem.com/">
             {text.backToEcosystem}
           </a>

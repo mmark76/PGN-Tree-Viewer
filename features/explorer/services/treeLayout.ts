@@ -41,6 +41,7 @@ export function smartFitTreeZoom(
 
 export function layoutTree(root: TreeNode, collapsedIds: Set<string>, direction: TreeDirection = "right") {
   const positioned = new Map<string, PositionedNode>();
+  const rootPly = root.ply;
   let nextLeaf = 0;
 
   const place = (node: TreeNode, parentCount: number): number => {
@@ -50,8 +51,9 @@ export function layoutTree(root: TreeNode, collapsedIds: Set<string>, direction:
       ? (Math.min(...childYs) + Math.max(...childYs)) / 2
       : marginY + nextLeaf++ * verticalGap;
 
-    const x = direction === "right" ? marginX + node.ply * horizontalGap : marginX + nextLeafPosition(crossPosition) * horizontalGap;
-    const y = direction === "right" ? crossPosition : marginY + node.ply * verticalGap;
+    const relativePly = node.ply - rootPly;
+    const x = direction === "right" ? marginX + relativePly * horizontalGap : marginX + nextLeafPosition(crossPosition) * horizontalGap;
+    const y = direction === "right" ? crossPosition : marginY + relativePly * verticalGap;
 
     positioned.set(node.id, {
       ...node,
