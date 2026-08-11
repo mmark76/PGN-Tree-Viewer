@@ -6,6 +6,7 @@ import type { CSSProperties } from "react";
 import type { MoveCoordinates } from "../types";
 import { messages } from "../i18n";
 import type { Locale } from "../i18n";
+import { getNotationColor } from "../settings";
 import { usePrefersReducedMotion } from "../services/reducedMotion";
 
 type ChessBoardProps = {
@@ -32,6 +33,8 @@ export function ChessBoard({ fen, lastMove, flipped, locale, lightSquareColor, d
   const selectionResetFrameRef = useRef<number | null>(null);
   const selectedSquare = !disabled && selection?.fen === fen ? selection.square : null;
   const squareStyles: Record<string, CSSProperties> = {};
+  const lightSquareNotationColor = getNotationColor(lightSquareColor);
+  const darkSquareNotationColor = getNotationColor(darkSquareColor);
 
   useEffect(() => {
     if (!disabled || selectionResetFrameRef.current !== null) return;
@@ -104,8 +107,8 @@ export function ChessBoard({ fen, lastMove, flipped, locale, lightSquareColor, d
             },
             lightSquareStyle: { backgroundColor: lightSquareColor },
             darkSquareStyle: { backgroundColor: darkSquareColor },
-            lightSquareNotationStyle: { ...notationStyle, color: darkSquareColor },
-            darkSquareNotationStyle: { ...notationStyle, color: lightSquareColor },
+            lightSquareNotationStyle: { ...notationStyle, color: lightSquareNotationColor },
+            darkSquareNotationStyle: { ...notationStyle, color: darkSquareNotationColor },
             boardStyle: {
               borderRadius: "9px",
               overflow: "hidden",

@@ -8,8 +8,10 @@ type ExplorerHeaderProps = {
   importProgressLabel: string;
   locale: Locale;
   downloadDisabled: boolean;
+  uploadDisabled: boolean;
   onLocaleChange: (locale: Locale) => void;
   onCancelImport: () => void;
+  onOpenFilePicker: () => void;
   onOpenDownload: () => void;
   onOpenSan: () => void;
   onOpenSettings: () => void;
@@ -22,8 +24,10 @@ export function ExplorerHeader({
   importProgressLabel,
   locale,
   downloadDisabled,
+  uploadDisabled,
   onLocaleChange,
   onCancelImport,
+  onOpenFilePicker,
   onOpenDownload,
   onOpenSan,
   onOpenSettings,
@@ -76,10 +80,15 @@ export function ExplorerHeader({
               </button>
             </div>
           ) : (
-            <label className="button primary upload-label" htmlFor="tree-file">
+            <button
+              className="button primary upload-label"
+              type="button"
+              disabled={uploadDisabled}
+              onClick={onOpenFilePicker}
+            >
               <span aria-hidden="true">↑</span>
               <span>{text.importPgn}</span>
-            </label>
+            </button>
           )}
           <a className="ecosystem-link" href="https://markellosecosystem.com/">
             {text.backToEcosystem}

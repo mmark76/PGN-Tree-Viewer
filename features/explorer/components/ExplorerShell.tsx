@@ -43,6 +43,11 @@ import type {
 } from "../services/importPipeline";
 import { createManualLine, upsertManualLine, upsertManualLines } from "../services/manualLines";
 import { appendManualMoveToTree } from "../services/manualTree";
+import {
+  applyDocumentLocale,
+  readStoredLocale,
+  storeLocale,
+} from "../services/localeStorage";
 import { resolveSelectionAfterCollapse } from "../services/treeSelection";
 import {
   isExplorerDataMutationLocked,
@@ -179,7 +184,13 @@ export function ExplorerShell() {
   };
 
   useEffect(() => {
-    const frame = window.requestAnimationFrame(() => setSettings(readStoredSettings()));
+    const frame = window.requestAnimationFrame(() => {
+      setSettings(readStoredSettings());
+      const storedLocale = readStoredLocale();
+      localeRef.current = storedLocale;
+      setLocale(storedLocale);
+      applyDocumentLocale(storedLocale);
+    });
     return () => window.cancelAnimationFrame(frame);
   }, []);
 
@@ -195,8 +206,10 @@ export function ExplorerShell() {
   };
 
   const changeLocale = (nextLocale: Locale) => {
+    localeRef.current = nextLocale;
     setLocale(nextLocale);
-    document.documentElement.lang = nextLocale;
+    applyDocumentLocale(nextLocale);
+    storeLocale(nextLocale);
     setNotice("");
     setNoticeIsError(false);
   };
@@ -566,10 +579,11 @@ export function ExplorerShell() {
       <input
         ref={fileInput}
         id="tree-file"
-        className="file-input"
         type="file"
         accept=".pgn,.json,text/plain,application/json"
         disabled={dataMutationLocked}
+        hidden
+        tabIndex={-1}
         onChange={importFile}
       />
       <ExplorerHeader
@@ -579,8 +593,10 @@ export function ExplorerShell() {
         importProgressLabel={importProgressLabel(locale, importProgress.stage, importProgress.percent)}
         locale={locale}
         downloadDisabled={!hasTree || dataMutationLocked}
+        uploadDisabled={dataMutationLocked}
         onLocaleChange={changeLocale}
         onCancelImport={cancelImport}
+        onOpenFilePicker={openFilePicker}
         onOpenDownload={() => setDownloadOpen(true)}
         onOpenSan={() => {
           setManualBuildError("");
@@ -627,7 +643,7 @@ export function ExplorerShell() {
                 <button className="icon-button" type="button" onClick={() => setCollapsedIds(new Set())} aria-label={text.expandAll}>↗</button>
               </div>
             ) : (
-              <button className="button" type="button" onClick={openFilePicker} disabled={importing}>
+              <button className="button" type="button" onClick={openFilePicker} disabled={dataMutationLocked}>
                 {text.importPgn}
               </button>
             )}

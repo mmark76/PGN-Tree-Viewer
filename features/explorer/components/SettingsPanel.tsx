@@ -1,9 +1,16 @@
 "use client";
 
-import { useRef } from "react";
+import { useId, useRef, useState } from "react";
 import type { RefObject } from "react";
-import type { BoardSize, ExplorerSettings, FontChoice, TextSize, TreeDirection } from "../settings";
-import { DEFAULT_SETTINGS } from "../settings";
+import type {
+  BoardSize,
+  ExplorerColorSettings,
+  ExplorerSettings,
+  FontChoice,
+  TextSize,
+  TreeDirection,
+} from "../settings";
+import { DEFAULT_SETTINGS, validateColorSettings } from "../settings";
 import { messages } from "../i18n";
 import type { Locale } from "../i18n";
 import { useModalFocus } from "../services/modalFocus";
@@ -15,14 +22,52 @@ type SettingsPanelProps = {
   onClose: () => void;
 };
 
+type ColorDraftState = {
+  sourceKey: string;
+  draft: ExplorerColorSettings;
+};
+
 export function SettingsPanel({ locale, settings, onChange, onClose }: SettingsPanelProps) {
   const text = messages[locale];
   const dialogRef = useRef<HTMLElement>(null);
   const initialFocusRef = useRef<HTMLInputElement>(null);
+  const errorIdPrefix = useId();
+  const accentErrorId = `${errorIdPrefix}-accent`;
+  const squareErrorId = `${errorIdPrefix}-squares`;
+  const settingsColors = colorSettingsFrom(settings);
+  const settingsColorsKey = colorSettingsKey(settingsColors);
+  const [colorDraftState, setColorDraftState] = useState<ColorDraftState>(() => ({
+    sourceKey: settingsColorsKey,
+    draft: settingsColors,
+  }));
+  let colorDraft = colorDraftState.draft;
+  if (colorDraftState.sourceKey !== settingsColorsKey) {
+    colorDraft = settingsColors;
+    setColorDraftState({ sourceKey: settingsColorsKey, draft: settingsColors });
+  }
+  const colorValidation = validateColorSettings(colorDraft);
   useModalFocus({ dialogRef, initialFocusRef, onClose });
 
   const update = <Key extends keyof ExplorerSettings>(key: Key, value: ExplorerSettings[Key]) =>
     onChange({ ...settings, [key]: value });
+
+  const updateColor = (key: keyof ExplorerColorSettings, value: string) => {
+    const nextDraft = { ...colorDraft, [key]: value };
+    setColorDraftState({ sourceKey: settingsColorsKey, draft: nextDraft });
+    if (validateColorSettings(nextDraft).isValid) {
+      onChange({ ...settings, ...nextDraft });
+    }
+  };
+
+  const resetSettings = () => {
+    const defaultColors = {
+      accentColor: DEFAULT_SETTINGS.accentColor,
+      lightSquareColor: DEFAULT_SETTINGS.lightSquareColor,
+      darkSquareColor: DEFAULT_SETTINGS.darkSquareColor,
+    };
+    setColorDraftState({ sourceKey: settingsColorsKey, draft: defaultColors });
+    onChange({ ...DEFAULT_SETTINGS });
+  };
 
   return (
     <div
@@ -54,11 +99,39 @@ export function SettingsPanel({ locale, settings, onChange, onClose }: SettingsP
               <ColorSetting
                 inputRef={initialFocusRef}
                 label={text.accentColor}
-                value={settings.accentColor}
-                onChange={(value) => update("accentColor", value)}
+                value={colorDraft.accentColor}
+                invalid={!colorValidation.accentColorIsValid}
+                describedBy={!colorValidation.accentColorIsValid ? accentErrorId : undefined}
+                onChange={(value) => updateColor("accentColor", value)}
               />
-              <ColorSetting label={text.lightSquares} value={settings.lightSquareColor} onChange={(value) => update("lightSquareColor", value)} />
-              <ColorSetting label={text.darkSquares} value={settings.darkSquareColor} onChange={(value) => update("darkSquareColor", value)} />
+              <ColorSetting
+                label={text.lightSquares}
+                value={colorDraft.lightSquareColor}
+                invalid={!colorValidation.squareColorsAreValid}
+                describedBy={!colorValidation.squareColorsAreValid ? squareErrorId : undefined}
+                onChange={(value) => updateColor("lightSquareColor", value)}
+              />
+              <ColorSetting
+                label={text.darkSquares}
+                value={colorDraft.darkSquareColor}
+                invalid={!colorValidation.squareColorsAreValid}
+                describedBy={!colorValidation.squareColorsAreValid ? squareErrorId : undefined}
+                onChange={(value) => updateColor("darkSquareColor", value)}
+              />
+              {(!colorValidation.accentColorIsValid || !colorValidation.squareColorsAreValid) && (
+                <div className="color-settings-errors">
+                  {!colorValidation.accentColorIsValid && (
+                    <p id={accentErrorId} className="color-setting-error" role="alert">
+                      {text.accentColorContrastError}
+                    </p>
+                  )}
+                  {!colorValidation.squareColorsAreValid && (
+                    <p id={squareErrorId} className="color-setting-error" role="alert">
+                      {text.squareColorsContrastError}
+                    </p>
+                  )}
+                </div>
+              )}
             </div>
           </fieldset>
 
@@ -115,7 +188,7 @@ export function SettingsPanel({ locale, settings, onChange, onClose }: SettingsP
         </div>
 
         <div className="settings-footer">
-          <button className="button" type="button" onClick={() => onChange({ ...DEFAULT_SETTINGS })}>{text.resetSettings}</button>
+          <button className="button" type="button" onClick={resetSettings}>{text.resetSettings}</button>
           <button className="button primary" type="button" onClick={onClose}>{text.done}</button>
         </div>
       </section>
@@ -123,19 +196,40 @@ export function SettingsPanel({ locale, settings, onChange, onClose }: SettingsP
   );
 }
 
+function colorSettingsFrom(settings: ExplorerSettings): ExplorerColorSettings {
+  return {
+    accentColor: settings.accentColor,
+    lightSquareColor: settings.lightSquareColor,
+    darkSquareColor: settings.darkSquareColor,
+  };
+}
+
+function colorSettingsKey(colors: ExplorerColorSettings) {
+  return `${colors.accentColor}|${colors.lightSquareColor}|${colors.darkSquareColor}`;
+}
+
 type ColorSettingProps = {
   inputRef?: RefObject<HTMLInputElement | null>;
   label: string;
   value: string;
+  invalid: boolean;
+  describedBy?: string;
   onChange: (value: string) => void;
 };
 
-function ColorSetting({ inputRef, label, value, onChange }: ColorSettingProps) {
+function ColorSetting({ inputRef, label, value, invalid, describedBy, onChange }: ColorSettingProps) {
   return (
     <label className="color-setting">
       <span>{label}</span>
-      <span className="color-control">
-        <input ref={inputRef} type="color" value={value} onChange={(event) => onChange(event.target.value)} />
+      <span className={`color-control${invalid ? " invalid" : ""}`}>
+        <input
+          ref={inputRef}
+          type="color"
+          value={value}
+          aria-invalid={invalid}
+          aria-describedby={describedBy}
+          onChange={(event) => onChange(event.target.value)}
+        />
         <code>{value.toUpperCase()}</code>
       </span>
     </label>
