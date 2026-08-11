@@ -387,15 +387,6 @@ button {
   padding-inline: 10px;
 }
 
-.file-input {
-  position: fixed;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  opacity: 0.01;
-  pointer-events: none;
-}
-
 .workspace {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(320px, var(--inspector-width));
@@ -1071,6 +1062,12 @@ button {
   background: #fff;
 }
 
+.color-control.invalid {
+  border-color: #c16a5d;
+  background: #fff7f5;
+  box-shadow: 0 0 0 2px rgba(167, 75, 61, 0.12);
+}
+
 .color-control input {
   width: 34px;
   height: 30px;
@@ -1086,6 +1083,20 @@ button {
   color: var(--ink);
   font-family: var(--font-geist-mono), monospace;
   font-size: 10px;
+}
+
+.color-settings-errors {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 5px;
+}
+
+.color-setting-error {
+  margin: 0;
+  color: var(--rust);
+  font-size: calc(11px + var(--font-step));
+  font-weight: 700;
+  line-height: 1.4;
 }
 
 .setting-row {
