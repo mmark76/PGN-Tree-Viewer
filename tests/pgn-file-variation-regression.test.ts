@@ -35,10 +35,10 @@ test("file PGN import preserves recursive variations without inflating game tota
 
 test("file PGN variations retain a declared custom FEN", () => {
   const pgn = `[SetUp "1"]
-[FEN "8/8/8/8/8/8/5K2/7k b - - 0 37"]
+[FEN "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b KQkq - 0 7"]
 [Result "*"]
 
-37... Kh2 (37... Kh1) 38. Kf3 *`;
+7... e5 (7... c5) 8. Nf3 *`;
 
   const parsed = parsePgnCollection(pgn);
 
@@ -47,7 +47,7 @@ test("file PGN variations retain a declared custom FEN", () => {
   assert.equal(parsed.lines.length, 2);
   assert.equal(parsed.lines[0].startFen, parsed.lines[1].startFen);
   assert.deepEqual(parsed.lines.map((line) => line.moves), [
-    ["Kh2", "Kf3"],
-    ["Kh1"],
+    ["e5", "Nf3"],
+    ["c5"],
   ]);
 });
