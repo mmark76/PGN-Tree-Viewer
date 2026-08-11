@@ -1,13 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
-import type { ChangeEvent, ClipboardEvent } from "react";
+import type { ChangeEvent } from "react";
 import { importErrorMessage, importProgressLabel, messages } from "../i18n";
 import type { Locale } from "../i18n";
 import type { ImportProgress, ImportWorkerResponse } from "../services/importPipeline";
 import { DEFAULT_INPUT_LIMITS } from "../services/inputLimits";
 import { useModalFocus } from "../services/modalFocus";
-import { acceptSanInput, insertSanInput } from "../services/sanInput";
+import { acceptSanInput } from "../services/sanInput";
 import type { SanInputResult } from "../services/sanInput";
 import type { SanValidationResult } from "../services/sanParser";
 import { createSanPasteState, sanPasteReducer } from "../services/sanPasteState";
@@ -175,19 +175,6 @@ export function SanPastePanel({
     acceptInput(acceptSanInput(event.target.value), "edit");
   };
 
-  const pasteInput = (event: ClipboardEvent<HTMLTextAreaElement>) => {
-    const insertedValue = event.clipboardData.getData("text");
-    if (!insertedValue) return;
-    const textarea = event.currentTarget;
-    const start = textarea.selectionStart ?? state.value.length;
-    const end = textarea.selectionEnd ?? start;
-    const result = insertSanInput(state.value, insertedValue, start, end);
-    event.preventDefault();
-    if (!acceptInput(result, "edit") || !result.accepted) return;
-    const caret = start + insertedValue.length;
-    window.requestAnimationFrame(() => textareaRef.current?.setSelectionRange(caret, caret));
-  };
-
   const pasteClipboard = async () => {
     try {
       const clipboardText = await navigator.clipboard.readText();
@@ -246,7 +233,6 @@ export function SanPastePanel({
             maxLength={DEFAULT_INPUT_LIMITS.maxSanCharacters}
             placeholder="1. e4 e5 2. Nf3 Nc6 3. Bb5"
             onChange={editInput}
-            onPaste={pasteInput}
             disabled={building}
             spellCheck={false}
           />
