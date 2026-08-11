@@ -20,3 +20,26 @@ export function resolveSelectionAfterCollapse(
 
   return selectedId;
 }
+
+export function revealSelectionAncestors(
+  index: ReadonlyMap<string, TreeNode>,
+  collapsedIds: Set<string>,
+  selectedId: string,
+  fallbackParentId: string | null = null,
+): Set<string> {
+  const selected = index.get(selectedId);
+  let ancestorId = selected ? selected.parentId : fallbackParentId;
+  if (!ancestorId) return collapsedIds;
+
+  const next = new Set(collapsedIds);
+  const visited = new Set<string>();
+  let changed = false;
+
+  while (ancestorId && !visited.has(ancestorId)) {
+    visited.add(ancestorId);
+    changed = next.delete(ancestorId) || changed;
+    ancestorId = index.get(ancestorId)?.parentId ?? null;
+  }
+
+  return changed ? next : collapsedIds;
+}

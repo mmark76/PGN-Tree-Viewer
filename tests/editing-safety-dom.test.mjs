@@ -333,6 +333,17 @@ test("mounted editing flow promotes exactly once, confirms replacement, preserve
     assert.equal(document.querySelectorAll('[role="treeitem"]').length, 1);
     assert.equal(rootTreeItem()?.getAttribute("aria-selected"), "true");
 
+    await click(buttonNamed("Next main-line move"));
+    const revealedSelection = document.querySelector('[role="treeitem"][aria-selected="true"]');
+    assert.equal(rootTreeItem()?.getAttribute("aria-expanded"), "true");
+    assert.equal(document.querySelectorAll('[role="treeitem"]').length > 1, true);
+    assert.equal(revealedSelection?.getAttribute("aria-level"), "2");
+
+    // Restore the collapsed-parent state expected by the replacement checks below.
+    await click(document.querySelector(".collapse-control"));
+    assert.equal(document.querySelectorAll('[role="treeitem"]').length, 1);
+    assert.equal(rootTreeItem()?.getAttribute("aria-selected"), "true");
+
     const workerCountBeforeCancel = WorkerStub.instances.length;
     confirmAnswers.push(false);
     await selectFile("replacement.pgn");
