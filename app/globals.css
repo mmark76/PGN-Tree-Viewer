@@ -617,6 +617,19 @@ button {
   color: #8a322a;
 }
 
+.notice-with-action {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.notice-action {
+  flex: 0 0 auto;
+  min-height: 38px;
+  padding-block: 7px;
+}
+
 .tree-canvas {
   position: relative;
   transform-origin: top left;
@@ -1129,6 +1142,51 @@ button {
 
 .san-dialog { width: min(100%, 650px); }
 
+.promotion-dialog { width: min(100%, 480px); }
+
+.promotion-choices {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  overflow-y: auto;
+  padding: 22px;
+}
+
+.promotion-choice {
+  min-width: 0;
+  min-height: 92px;
+  display: grid;
+  place-items: center;
+  gap: 4px;
+  padding: 10px 6px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: #fff;
+  color: var(--forest);
+  cursor: pointer;
+}
+
+.promotion-choice:hover,
+.promotion-choice:focus-visible {
+  border-color: var(--forest);
+  background: #f5f7f1;
+}
+
+.promotion-choice > span {
+  font-size: 38px;
+  line-height: 1;
+}
+
+.promotion-choice > small {
+  color: var(--muted);
+  font-size: calc(10px + var(--font-step));
+  font-weight: 800;
+  line-height: 1.2;
+  text-align: center;
+}
+
+.promotion-footer { justify-content: flex-end; }
+
 .san-body {
   display: grid;
   gap: 12px;
@@ -1333,6 +1391,8 @@ button {
   .settings-head { padding: 17px 16px 14px; }
   .settings-body { padding: 14px 16px; }
   .settings-footer { padding: 13px 16px 15px; }
+  .notice-with-action { align-items: flex-start; flex-direction: column; }
+  .promotion-choices { grid-template-columns: repeat(2, minmax(0, 1fr)); padding: 16px; }
   .color-settings { grid-template-columns: 1fr; }
   .download-options { padding: 14px 16px 18px; }
   .san-body { padding: 14px 16px; }

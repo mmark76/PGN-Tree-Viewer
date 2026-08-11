@@ -14,7 +14,8 @@ import {
 } from "../i18n";
 import type { Locale } from "../i18n";
 import { buildTree, gameCount, indexTree, pathToNode } from "../services/treeBuilder";
-import { playBoardMove } from "../services/boardMove";
+import { playBoardMove, promotionChoicesForMove } from "../services/boardMove";
+import type { PlayedBoardMove, PromotionPiece } from "../services/boardMove";
 import { MAX_TREE_ZOOM, MIN_TREE_ZOOM } from "../services/treeLayout";
 import {
   downloadBaseName,
@@ -42,6 +43,7 @@ import type {
 } from "../services/importPipeline";
 import { createManualLine, upsertManualLine, upsertManualLines } from "../services/manualLines";
 import { appendManualMoveToTree } from "../services/manualTree";
+import { resolveSelectionAfterCollapse } from "../services/treeSelection";
 import {
   isExplorerDataMutationLocked,
 } from "../services/explorerTaskLock";
@@ -56,6 +58,7 @@ import { PositionInspector } from "./PositionInspector";
 import { SettingsPanel } from "./SettingsPanel";
 import { DownloadPanel } from "./DownloadPanel";
 import { SanPastePanel } from "./SanPastePanel";
+import { PromotionDialog } from "./PromotionDialog";
 import type { DownloadFormat } from "./DownloadPanel";
 
 export type TreeViewMode = "smart" | "overview" | "manual";
@@ -63,6 +66,27 @@ export type TreeViewMode = "smart" | "overview" | "manual";
 type ExplorerData = {
   lines: LineRecord[];
   tree: TreeNode;
+};
+
+type PendingPromotion = {
+  choices: readonly PromotionPiece[];
+  fen: string;
+  from: string;
+  nodeId: string;
+  to: string;
+};
+
+type ExplorerSnapshot = {
+  collapsedIds: Set<string>;
+  contentDirty: boolean;
+  data: ExplorerData;
+  fileName: string;
+  fitRequest: number;
+  flipped: boolean;
+  selectedId: string;
+  settings: ExplorerSettings;
+  treeViewMode: TreeViewMode;
+  zoom: number;
 };
 
 export function ExplorerShell() {
@@ -79,6 +103,7 @@ export function ExplorerShell() {
   const [locale, setLocale] = useState<Locale>(DEFAULT_LOCALE);
   const localeRef = useRef(locale);
   const fileInput = useRef<HTMLInputElement>(null);
+  const treeSectionRef = useRef<HTMLElement>(null);
   const workerRef = useRef<Worker | null>(null);
   const workerTaskRef = useRef<ExplorerDataTask | null>(null);
   const importRequestId = useRef(0);
@@ -94,6 +119,9 @@ export function ExplorerShell() {
   const [downloadOpen, setDownloadOpen] = useState(false);
   const [sanOpen, setSanOpen] = useState(false);
   const [manualBuildError, setManualBuildError] = useState("");
+  const [contentDirty, setContentDirty] = useState(false);
+  const [undoSnapshot, setUndoSnapshot] = useState<ExplorerSnapshot | null>(null);
+  const [pendingPromotion, setPendingPromotion] = useState<PendingPromotion | null>(null);
   const selected = index.get(selectedId) ?? tree;
   const hasTree = tree.children.length > 0;
   const text = messages[locale];
@@ -101,7 +129,54 @@ export function ExplorerShell() {
     "--forest": settings.accentColor,
     "--forest-2": settings.accentColor,
   } as CSSProperties;
-  const dataMutationLocked = importing;
+  const dataMutationLocked = importing || pendingPromotion !== null;
+
+  const captureSnapshot = (): ExplorerSnapshot => ({
+    collapsedIds: new Set(collapsedIds),
+    contentDirty,
+    // Tree and line updates replace immutable values, so retaining the current
+    // reference is an O(1) snapshot even for a tree at the configured node cap.
+    data,
+    fileName,
+    fitRequest,
+    flipped,
+    selectedId,
+    settings: { ...settings },
+    treeViewMode,
+    zoom,
+  });
+
+  const confirmReplacement = () => {
+    if (!hasTree || !contentDirty) return { proceed: true, snapshot: null } as const;
+    if (!window.confirm(text.replaceUnsavedTree)) {
+      return { proceed: false, snapshot: null } as const;
+    }
+    return { proceed: true, snapshot: captureSnapshot() } as const;
+  };
+
+  const restorePreviousTree = () => {
+    if (!undoSnapshot || dataMutationLocked) return;
+    const snapshot = undoSnapshot;
+    setData(snapshot.data);
+    setFileName(snapshot.fileName);
+    setSelectedId(snapshot.selectedId);
+    setCollapsedIds(new Set(snapshot.collapsedIds));
+    setSettings({ ...snapshot.settings });
+    storeSettings(snapshot.settings);
+    setContentDirty(snapshot.contentDirty);
+    setZoom(snapshot.zoom);
+    setTreeViewMode(snapshot.treeViewMode);
+    setFitRequest(snapshot.fitRequest);
+    setFlipped(snapshot.flipped);
+    setUndoSnapshot(null);
+    setNotice(text.treeRestored);
+    setNoticeIsError(false);
+    window.requestAnimationFrame(() => {
+      treeSectionRef.current
+        ?.querySelector<HTMLElement>('[role="treeitem"][aria-selected="true"]')
+        ?.focus({ preventScroll: true });
+    });
+  };
 
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => setSettings(readStoredSettings()));
@@ -115,7 +190,7 @@ export function ExplorerShell() {
   }, [locale]);
 
   const openFilePicker = () => {
-    if (isExplorerDataMutationLocked(importing, workerTaskRef.current)) return;
+    if (dataMutationLocked || isExplorerDataMutationLocked(importing, workerTaskRef.current)) return;
     fileInput.current?.click();
   };
 
@@ -149,7 +224,7 @@ export function ExplorerShell() {
   const importFile = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
-    if (isExplorerDataMutationLocked(importing, workerTaskRef.current)) {
+    if (dataMutationLocked || isExplorerDataMutationLocked(importing, workerTaskRef.current)) {
       event.target.value = "";
       return;
     }
@@ -164,6 +239,12 @@ export function ExplorerShell() {
       return;
     }
 
+    const replacement = confirmReplacement();
+    if (!replacement.proceed) {
+      event.target.value = "";
+      return;
+    }
+
     workerRef.current?.terminate();
     workerTaskRef.current = "file";
     const requestId = importRequestId.current + 1;
@@ -173,6 +254,7 @@ export function ExplorerShell() {
     setNoticeIsError(false);
     setManualBuildError("");
     setSettingsOpen(false);
+    setDownloadOpen(false);
     setImportProgress({ percent: 0, stage: "reading" });
     event.target.value = "";
 
@@ -197,6 +279,8 @@ export function ExplorerShell() {
       setCollapsedIds(new Set());
       setTreeViewMode("smart");
       setFitRequest((value) => value + 1);
+      setContentDirty(false);
+      setUndoSnapshot(replacement.snapshot);
       setImporting(false);
     };
 
@@ -253,6 +337,7 @@ export function ExplorerShell() {
   };
 
   const downloadTree = (format: DownloadFormat) => {
+    if (dataMutationLocked || isExplorerDataMutationLocked(importing, workerTaskRef.current)) return;
     const baseName = downloadBaseName(fileName);
     if (format === "pgn") {
       downloadTextFile(serializeTreeToPgn(tree), `${baseName}.pgn`, "application/x-chess-pgn;charset=utf-8");
@@ -266,14 +351,18 @@ export function ExplorerShell() {
       );
       return;
     }
+    const serializedTree = serializeChessTreeJson(lines, settings, fileName);
     downloadTextFile(
-      serializeChessTreeJson(lines, settings, fileName),
+      serializedTree,
       `${baseName}.chess-tree-builder.json`,
       "application/json;charset=utf-8",
     );
+    setContentDirty(false);
   };
 
   const toggleBranch = (id: string) => {
+    const isCollapsing = !collapsedIds.has(id);
+    setSelectedId((current) => resolveSelectionAfterCollapse(index, current, id, isCollapsing));
     setCollapsedIds((current) => {
       const next = new Set(current);
       if (next.has(id)) next.delete(id);
@@ -352,31 +441,29 @@ export function ExplorerShell() {
     }
   };
 
-  const addMoveFromBoard = (from: string, to: string) => {
-    if (isExplorerDataMutationLocked(importing, workerTaskRef.current)) return false;
-    const played = playBoardMove(selected.fen, from, to);
-    if (!played) return false;
-
-    const existing = selected.children.find((child) => child.san === played.san);
+  const appendBoardMove = (parent: TreeNode, played: PlayedBoardMove) => {
+    const existing = parent.children.find((child) => child.san === played.san);
     if (existing) {
       setSelectedId(existing.id);
       setCollapsedIds((current) => {
-        if (!current.has(selected.id)) return current;
+        if (!current.has(parent.id)) return current;
         const next = new Set(current);
-        next.delete(selected.id);
+        next.delete(parent.id);
         return next;
       });
       return true;
     }
 
-    const moves = [...pathToNode(selected, index), played.san];
+    const moves = [...pathToNode(parent, index), played.san];
     const moveKey = `${played.from}${played.to}${played.promotion ?? ""}`;
     const nextLines = upsertManualLine(lines, moves, tree.fen);
     try {
       assertLineCollectionWithinLimits(nextLines);
       assertNodeCountWithinLimit(index.size + 1);
-      const nextTree = appendManualMoveToTree(tree, selected.id, played);
+      const nextTree = appendManualMoveToTree(tree, parent.id, played);
       setData({ lines: nextLines, tree: nextTree });
+      setContentDirty(true);
+      setUndoSnapshot(null);
       setNotice(text.moveAdded);
       setNoticeIsError(false);
     } catch (error) {
@@ -385,14 +472,47 @@ export function ExplorerShell() {
       setNoticeIsError(true);
       return false;
     }
-    setSelectedId(`${selected.id}-${moveKey}`);
+    setSelectedId(`${parent.id}-${moveKey}`);
     setCollapsedIds((current) => {
-      if (!current.has(selected.id)) return current;
+      if (!current.has(parent.id)) return current;
       const next = new Set(current);
-      next.delete(selected.id);
+      next.delete(parent.id);
       return next;
     });
     return true;
+  };
+
+  const addMoveFromBoard = (from: string, to: string) => {
+    if (dataMutationLocked || isExplorerDataMutationLocked(importing, workerTaskRef.current)) {
+      return false;
+    }
+    if (isPotentialPromotionMove(from, to)) {
+      const promotionChoices = promotionChoicesForMove(selected.fen, from, to);
+      if (promotionChoices.length) {
+        setPendingPromotion({
+          choices: promotionChoices,
+          fen: selected.fen,
+          from,
+          nodeId: selected.id,
+          to,
+        });
+        return false;
+      }
+    }
+
+    const played = playBoardMove(selected.fen, from, to);
+    return played ? appendBoardMove(selected, played) : false;
+  };
+
+  const choosePromotion = (promotion: PromotionPiece) => {
+    const pending = pendingPromotion;
+    if (!pending) return;
+    setPendingPromotion(null);
+    if (isExplorerDataMutationLocked(importing, workerTaskRef.current)) return;
+    const parent = index.get(pending.nodeId);
+    if (!parent || parent.fen !== pending.fen || !pending.choices.includes(promotion)) return;
+    const played = playBoardMove(pending.fen, pending.from, pending.to, promotion);
+    if (played) appendBoardMove(parent, played);
   };
 
   const addSanFromSelected = (sanLines: string[][]) => {
@@ -403,7 +523,15 @@ export function ExplorerShell() {
       sanLines.map((moves) => [...prefix, ...moves]),
       tree.fen,
     );
+    if (lineCollectionsEqual(lines, nextLines)) {
+      setNotice(text.sanAlreadyPresent);
+      setNoticeIsError(false);
+      setSanOpen(false);
+      return;
+    }
     void buildManualLines(nextLines, text.sanAdded, () => {
+      setContentDirty(true);
+      setUndoSnapshot(null);
       setCollapsedIds(new Set());
       setSanOpen(false);
     });
@@ -411,11 +539,15 @@ export function ExplorerShell() {
 
   const replaceWithSan = (sanLines: string[][], startFen: string) => {
     if (isExplorerDataMutationLocked(importing, workerTaskRef.current)) return;
+    const replacement = confirmReplacement();
+    if (!replacement.proceed) return;
     const nextLines = sanLines.map((moves) => createManualLine(moves, startFen));
     void buildManualLines(nextLines, text.sanTreeCreated, () => {
       setFileName("");
       setSelectedId("start");
       setCollapsedIds(new Set());
+      setContentDirty(true);
+      setUndoSnapshot(replacement.snapshot);
       setSanOpen(false);
       setTreeViewMode("smart");
       setFitRequest((value) => value + 1);
@@ -428,6 +560,7 @@ export function ExplorerShell() {
       data-text-size={settings.textSize}
       data-board-size={settings.boardSize}
       data-font={settings.font}
+      data-content-dirty={contentDirty}
       style={appStyle}
     >
       <input
@@ -436,7 +569,7 @@ export function ExplorerShell() {
         className="file-input"
         type="file"
         accept=".pgn,.json,text/plain,application/json"
-        disabled={importing}
+        disabled={dataMutationLocked}
         onChange={importFile}
       />
       <ExplorerHeader
@@ -445,7 +578,7 @@ export function ExplorerShell() {
         importProgress={importProgress.percent}
         importProgressLabel={importProgressLabel(locale, importProgress.stage, importProgress.percent)}
         locale={locale}
-        downloadDisabled={!hasTree}
+        downloadDisabled={!hasTree || dataMutationLocked}
         onLocaleChange={changeLocale}
         onCancelImport={cancelImport}
         onOpenDownload={() => setDownloadOpen(true)}
@@ -456,7 +589,7 @@ export function ExplorerShell() {
         onOpenSettings={() => setSettingsOpen(true)}
       />
       <main className="workspace">
-        <section className="tree-section" id="move-tree">
+        <section ref={treeSectionRef} className="tree-section" id="move-tree">
           <div className="tree-header">
             <div className="tree-heading">
               <strong>{text.moveTree}</strong>
@@ -502,6 +635,19 @@ export function ExplorerShell() {
           {notice && (
             <div className={`notice${noticeIsError ? " error" : ""}`} role="status">
               {notice}
+            </div>
+          )}
+          {undoSnapshot && (
+            <div className="notice notice-with-action" role="status">
+              <span>{text.previousTreeAvailable}</span>
+              <button
+                className="button notice-action"
+                type="button"
+                onClick={restorePreviousTree}
+                disabled={dataMutationLocked}
+              >
+                {text.undoReplacement}
+              </button>
             </div>
           )}
           {hasTree ? (
@@ -572,6 +718,34 @@ export function ExplorerShell() {
           }}
         />
       )}
+      {pendingPromotion && (
+        <PromotionDialog
+          choices={pendingPromotion.choices}
+          locale={locale}
+          onChoose={choosePromotion}
+          onClose={() => setPendingPromotion(null)}
+        />
+      )}
     </div>
   );
+}
+
+function lineCollectionsEqual(left: readonly LineRecord[], right: readonly LineRecord[]) {
+  return left.length === right.length && left.every((line, index) => {
+    const other = right[index];
+    return Boolean(other)
+      && line.opening === other.opening
+      && line.startFen === other.startFen
+      && line.results.white === other.results.white
+      && line.results.draw === other.results.draw
+      && line.results.black === other.results.black
+      && line.results.unknown === other.results.unknown
+      && line.moves.length === other.moves.length
+      && line.moves.every((move, moveIndex) => move === other.moves[moveIndex]);
+  });
+}
+
+function isPotentialPromotionMove(from: string, to: string) {
+  return (from[1] === "7" && to[1] === "8")
+    || (from[1] === "2" && to[1] === "1");
 }
