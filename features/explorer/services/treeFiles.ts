@@ -1,4 +1,4 @@
-import { Chess } from "chess.js";
+import { Chess, DEFAULT_POSITION } from "chess.js";
 import { normalizeSettings } from "../settings";
 import type { ExplorerSettings } from "../settings";
 import type { TreeDirection } from "../settings";
@@ -7,6 +7,15 @@ import { gamesLabel } from "../i18n";
 import type { Locale } from "../i18n";
 import { layoutTree } from "./treeLayout";
 import { popularityPercentage, resultCount } from "./treeBuilder";
+import {
+  assertAggregateTotalsSafe,
+  assertSingleStartFen,
+  checkedAddNonNegativeIntegers,
+  gameCount,
+  movePrefixFromPly,
+  normalizeStartFen,
+  startPlyFromFen,
+} from "./lineIntegrity";
 
 export const CHESSTREE_FILE_FORMAT = "chesstree";
 export const CHESSTREE_FILE_VERSION = 1;
@@ -24,6 +33,8 @@ export function serializeChessTreeJson(
   settings: ExplorerSettings,
   sourceFileName = "",
 ) {
+  assertSingleStartFen(lines);
+  assertAggregateTotalsSafe(lines);
   const file: ChessTreeFile = {
     format: CHESSTREE_FILE_FORMAT,
     version: CHESSTREE_FILE_VERSION,
@@ -47,11 +58,15 @@ export function parseChessTreeJson(content: string): ChessTreeFile {
     throw new Error("Invalid ChessTree lines");
   }
 
+  const lines = candidate.lines.map(validateLine);
+  assertSingleStartFen(lines);
+  assertAggregateTotalsSafe(lines);
+
   return {
     format: CHESSTREE_FILE_FORMAT,
     version: CHESSTREE_FILE_VERSION,
     sourceFileName: typeof candidate.sourceFileName === "string" ? candidate.sourceFileName : null,
-    lines: candidate.lines.map(validateLine),
+    lines,
     settings: normalizeSettings(candidate.settings),
   };
 }
@@ -70,7 +85,13 @@ function validateLine(value: unknown): LineRecord {
     return move.trim();
   });
 
-  const chess = new Chess();
+  const rawStartFen = (candidate as { startFen?: unknown }).startFen;
+  if (rawStartFen !== undefined && typeof rawStartFen !== "string") {
+    throw new Error("Invalid ChessTree start FEN");
+  }
+  const startFen = normalizeStartFen(rawStartFen ?? DEFAULT_POSITION);
+  checkedAddNonNegativeIntegers(startPlyFromFen(startFen), moves.length);
+  const chess = new Chess(startFen);
   for (const move of moves) {
     try {
       if (!chess.move(move)) throw new Error("Illegal ChessTree move");
@@ -86,30 +107,42 @@ function validateLine(value: unknown): LineRecord {
         ? candidate.opening
         : "__manual__",
     results: validateResults(candidate.results),
+    startFen,
   };
 }
 
 function validateResults(value: unknown): ResultTotals {
   if (!value || typeof value !== "object") throw new Error("Invalid ChessTree results");
   const candidate = value as Partial<ResultTotals>;
-  const values = [candidate.white, candidate.draw, candidate.black];
+  const unknown = candidate.unknown ?? 0;
+  const values = [candidate.white, candidate.draw, candidate.black, unknown];
   if (values.some((count) => !Number.isSafeInteger(count) || Number(count) < 0)) {
     throw new Error("Invalid ChessTree results");
   }
-  return {
+  const results = {
     white: candidate.white as number,
     draw: candidate.draw as number,
     black: candidate.black as number,
+    unknown,
   };
+  gameCount(results);
+  return results;
 }
 
 export function serializeTreeToPgn(root: TreeNode) {
   if (!root.children.length) throw new Error("Cannot export an empty tree");
+  const startFen = normalizeStartFen(root.fen);
   const moves = serializeContinuation(root);
-  return [
+  const headers = [
     '[Event "Chess Tree Builder Export"]',
     '[Site "chesstree.markellosecosystem.com"]',
     '[Result "*"]',
+  ];
+  if (startFen !== DEFAULT_POSITION) {
+    headers.push('[SetUp "1"]', `[FEN "${startFen}"]`);
+  }
+  return [
+    ...headers,
     "",
     `${moves} *`,
     "",
@@ -193,11 +226,11 @@ function serializeBranch(node: TreeNode): string {
 }
 
 function serializeMove(node: TreeNode) {
-  const moveNumber = Math.ceil(node.ply / 2);
-  const prefix = node.ply % 2 === 1 ? `${moveNumber}.` : `${moveNumber}...`;
+  const prefix = movePrefixFromPly(node.ply);
   const total = resultCount(node.results);
+  const unknownStatistics = node.results.unknown ? `; Unknown: ${node.results.unknown}` : "";
   const statistics = total
-    ? ` {Games: ${total}; White: ${node.results.white}; Draw: ${node.results.draw}; Black: ${node.results.black}}`
+    ? ` {Games: ${total}; White: ${node.results.white}; Draw: ${node.results.draw}; Black: ${node.results.black}${unknownStatistics}}`
     : "";
   return `${prefix} ${node.san}${statistics}`;
 }
