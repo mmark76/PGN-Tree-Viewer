@@ -535,15 +535,27 @@ button {
   white-space: nowrap;
 }
 
+.tree-navigator-map {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #f3f1ea;
+  cursor: crosshair;
+}
+
+.tree-navigator-map:focus-visible {
+  outline: 3px solid var(--forest-2);
+  outline-offset: 3px;
+}
+
 .tree-navigator svg {
   display: block;
   width: 100%;
   height: 112px;
   overflow: hidden;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: #f3f1ea;
-  cursor: crosshair;
+  border-radius: 7px;
 }
 
 .tree-navigator line {
@@ -610,10 +622,26 @@ button {
   transform-origin: top left;
 }
 
+.tree-lines-layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 1;
+  pointer-events: none;
+}
+
 .tree-lines {
   position: absolute;
   inset: 0;
   overflow: visible;
+  pointer-events: none;
+}
+
+.tree-items {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 4;
   pointer-events: none;
 }
 
@@ -648,12 +676,18 @@ button {
   box-shadow: 0 8px 20px rgba(33, 43, 37, 0.08);
   cursor: pointer;
   padding: 5px;
+  pointer-events: auto;
   text-align: center;
 }
 
 .move-node:hover {
   border-color: var(--forest-2);
   transform: scale(1.02);
+}
+
+.move-node:focus-visible {
+  outline: 3px solid var(--forest-2);
+  outline-offset: 3px;
 }
 
 .move-node.selected {
@@ -689,29 +723,55 @@ button {
   line-height: 1.2;
 }
 
+.tree-collapse-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+}
+
 .collapse-control {
   position: absolute;
-  right: -7px;
-  top: 50%;
-  width: 18px;
-  height: 18px;
+  width: 44px;
+  height: 44px;
   display: grid;
   place-items: center;
-  transform: translateY(-50%);
+  transform: translate(-50%, -50%);
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 0;
+  pointer-events: auto;
+  touch-action: manipulation;
+  user-select: none;
+}
+
+.collapse-control::before {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 18px;
+  height: 18px;
+  transform: translate(-50%, -50%);
   border: 1px solid var(--line);
   border-radius: 50%;
   background: white;
-  color: var(--muted);
-  font-size: 12px;
-  font-weight: 800;
+  content: "";
 }
 
-.tree-viewport[data-orientation="down"] .collapse-control {
-  right: auto;
-  top: auto;
-  bottom: -7px;
-  left: 50%;
-  transform: translateX(-50%);
+.collapse-control-glyph {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.collapse-control:hover::before {
+  border-color: var(--forest-2);
 }
 
 .inspector {
@@ -1112,8 +1172,11 @@ button {
 .san-footer .button:disabled { cursor: not-allowed; opacity: 0.45; }
 
 .download-options {
+  min-height: 0;
   display: grid;
   gap: 10px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 18px 22px 22px;
 }
 
@@ -1276,4 +1339,37 @@ button {
   .san-actions-top { align-items: stretch; flex-direction: column; }
   .san-footer { flex-direction: column; }
   .download-option { grid-template-columns: 50px minmax(0, 1fr) 22px; gap: 10px; padding: 11px; }
+}
+
+@media (max-height: 560px), (orientation: landscape) and (max-height: 680px) {
+  .settings-backdrop {
+    align-items: start;
+    overflow-y: auto;
+    padding: 8px;
+  }
+
+  .settings-dialog {
+    max-height: calc(100vh - 16px);
+    max-height: calc(100dvh - 16px);
+  }
+
+  .download-options {
+    flex: 1 1 auto;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    transition-delay: 0ms !important;
+  }
 }

@@ -6,6 +6,7 @@ import { importErrorMessage, importProgressLabel, messages } from "../i18n";
 import type { Locale } from "../i18n";
 import type { ImportProgress, ImportWorkerResponse } from "../services/importPipeline";
 import { DEFAULT_INPUT_LIMITS } from "../services/inputLimits";
+import { useModalFocus } from "../services/modalFocus";
 import { acceptSanInput, insertSanInput } from "../services/sanInput";
 import type { SanInputResult } from "../services/sanInput";
 import type { SanValidationResult } from "../services/sanParser";
@@ -42,12 +43,32 @@ export function SanPastePanel({
   onClose,
 }: SanPastePanelProps) {
   const text = messages[locale];
+  const dialogRef = useRef<HTMLElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const buildCancelRef = useRef<HTMLButtonElement>(null);
+  const previousBuildingRef = useRef(building);
   const validationWorkerRef = useRef<Worker | null>(null);
   const validationRequestIdRef = useRef(0);
   const validationTimeoutRef = useRef<number | null>(null);
   const [state, dispatch] = useReducer(sanPasteReducer, undefined, createSanPasteState);
   const [clipboardError, setClipboardError] = useState(false);
+  useModalFocus({ dialogRef, initialFocusRef: textareaRef, onClose });
+
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    const wasBuilding = previousBuildingRef.current;
+    previousBuildingRef.current = building;
+    if (!dialog) return;
+
+    if (building) {
+      buildCancelRef.current?.focus({ preventScroll: true });
+      return;
+    }
+
+    if (wasBuilding && !dialog.contains(dialog.ownerDocument.activeElement)) {
+      textareaRef.current?.focus({ preventScroll: true });
+    }
+  }, [building]);
 
   const stopValidationResources = useCallback(() => {
     if (validationTimeoutRef.current !== null) {
@@ -123,15 +144,6 @@ export function SanPastePanel({
   }, [building, selectedFen, stopValidationResources]);
 
   useEffect(() => {
-    textareaRef.current?.focus();
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
-    };
-    document.addEventListener("keydown", closeOnEscape);
-    return () => document.removeEventListener("keydown", closeOnEscape);
-  }, [onClose]);
-
-  useEffect(() => {
     stopValidationResources();
     if (building || !state.value.trim()) return;
     const value = state.value;
@@ -204,12 +216,24 @@ export function SanPastePanel({
       : "";
 
   return (
-    <div className="settings-backdrop" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
-      <section className="settings-dialog san-dialog" role="dialog" aria-modal="true" aria-labelledby="san-title">
+    <div
+      className="settings-backdrop"
+      data-modal-root
+      onMouseDown={(event) => event.target === event.currentTarget && onClose()}
+    >
+      <section
+        ref={dialogRef}
+        className="settings-dialog san-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="san-title"
+        aria-describedby="san-description"
+        tabIndex={-1}
+      >
         <div className="settings-head">
           <div>
             <h2 id="san-title">{text.pasteSan}</h2>
-            <p>{text.pasteSanDescription}</p>
+            <p id="san-description">{text.pasteSanDescription}</p>
           </div>
           <button className="settings-close" type="button" onClick={onClose} aria-label={text.closeSan}>×</button>
         </div>
@@ -271,7 +295,7 @@ export function SanPastePanel({
         </div>
         <div className="settings-footer san-footer">
           {building ? (
-            <button className="button" type="button" onClick={onCancelBuild}>{text.cancelImport}</button>
+            <button ref={buildCancelRef} className="button" type="button" onClick={onCancelBuild}>{text.cancelImport}</button>
           ) : (
             <>
               <button className="button" type="button" disabled={!startResult?.valid} onClick={() => startResult?.valid && onReplace(startResult.lines, startResult.startFen)}>{text.newTree}</button>
