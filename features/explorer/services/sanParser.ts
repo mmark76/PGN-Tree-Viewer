@@ -57,6 +57,17 @@ type SanOutputBudget = {
   plies: number;
 };
 
+type LeadingHeader = {
+  name: string;
+  value: string;
+};
+
+type LeadingHeaderSection = {
+  bodyStart: number;
+  headers: LeadingHeader[];
+  malformedFenTag: boolean;
+};
+
 class SanParseError extends Error {
   constructor(
     readonly moves: string[],
@@ -221,9 +232,10 @@ type ResolvedStartPosition =
   | { valid: false; errorCode: "invalid-fen" | "start-position-mismatch" };
 
 function resolveStartPosition(text: string, requestedStartFen?: string): ResolvedStartPosition {
-  const headerFenValues = extractHeaderValues(text, "fen");
-  const setupValues = extractHeaderValues(text, "setup");
-  if (/^\s*\[\s*FEN\b/im.test(text) && !headerFenValues.length) {
+  const headerSection = scanLeadingHeaderSection(text);
+  const headerFenValues = headerValues(headerSection, "fen");
+  const setupValues = headerValues(headerSection, "setup");
+  if (headerSection.malformedFenTag && !headerFenValues.length) {
     return { valid: false, errorCode: "invalid-fen" };
   }
   if (setupValues.some((value) => value === "1") && !headerFenValues.length) {
@@ -249,46 +261,159 @@ function resolveStartPosition(text: string, requestedStartFen?: string): Resolve
 }
 
 function extractHeaderValues(text: string, headerName: string) {
-  const values: string[] = [];
-  const headerPattern = /^\s*\[\s*([A-Za-z0-9_]+)\s+"((?:\\.|[^"\\])*)"\s*\]\s*$/gm;
-  for (const match of text.matchAll(headerPattern)) {
-    if (match[1].toLowerCase() !== headerName) continue;
-    values.push(match[2].replace(/\\"/g, '"').replace(/\\\\/g, "\\"));
+  return headerValues(scanLeadingHeaderSection(text), headerName);
+}
+
+function headerValues(section: LeadingHeaderSection, headerName: string) {
+  const normalizedName = headerName.toLowerCase();
+  return section.headers
+    .filter(({ name }) => name.toLowerCase() === normalizedName)
+    .map(({ value }) => value);
+}
+
+function scanLeadingHeaderSection(text: string): LeadingHeaderSection {
+  const headers: LeadingHeader[] = [];
+  const headerPattern = /^\s*\[\s*([A-Za-z0-9_]+)\s+"((?:\\.|[^"\\])*)"\s*\]\s*$/;
+  let offset = 0;
+
+  while (offset < text.length) {
+    const lineEnd = nextLineEnd(text, offset);
+    let firstContent = offset;
+    while (firstContent < lineEnd.contentEnd && /\s/.test(text[firstContent])) {
+      firstContent += 1;
+    }
+
+    if (firstContent === lineEnd.contentEnd) {
+      offset = lineEnd.nextOffset;
+      continue;
+    }
+
+    if (text[firstContent] !== "[") {
+      return { bodyStart: offset, headers, malformedFenTag: false };
+    }
+
+    const line = text.slice(offset, lineEnd.contentEnd);
+    const match = headerPattern.exec(line);
+    if (!match) {
+      return {
+        bodyStart: offset,
+        headers,
+        malformedFenTag: /^\s*\[\s*FEN\b/i.test(line),
+      };
+    }
+
+    headers.push({
+      name: match[1],
+      value: match[2].replace(/\\"/g, '"').replace(/\\\\/g, "\\"),
+    });
+    offset = lineEnd.nextOffset;
   }
-  return values;
+
+  return { bodyStart: text.length, headers, malformedFenTag: false };
+}
+
+function nextLineEnd(text: string, offset: number) {
+  let contentEnd = offset;
+  while (contentEnd < text.length && text[contentEnd] !== "\r" && text[contentEnd] !== "\n") {
+    contentEnd += 1;
+  }
+
+  let nextOffset = contentEnd;
+  if (text[nextOffset] === "\r") nextOffset += 1;
+  if (text[nextOffset] === "\n") nextOffset += 1;
+  return { contentEnd, nextOffset };
 }
 
 function tokenizeSan(text: string, limits: InputLimits) {
-  const withoutHeaders = text.replace(
-    /^\s*\[\s*[A-Za-z0-9_]+\s+"(?:\\.|[^"\\])*"\s*\]\s*$/gm,
-    " ",
-  );
-  const withoutComments = withoutHeaders
-    .replace(/\{[^}]*\}/g, " ")
-    .replace(/;[^\r\n]*/g, " ")
-    .replace(/\$\d+/g, " ");
-
+  const { bodyStart } = scanLeadingHeaderSection(text);
   let moveNumber = 0;
-  const tokens = withoutComments
-    .replace(/([()])/g, " $1 ")
-    .split(/\s+/)
-    .map((token) => token.trim())
-    .filter(Boolean)
-    .map((token) => token.replace(/^\d+\.(?:\.\.)?/, ""))
-    .filter((token) => token && !/^(?:1-0|0-1|1\/2-1\/2|\*)$/.test(token))
-    .map((value): SanToken => ({
-      value,
-      moveNumber: value === "(" || value === ")" ? moveNumber : ++moveNumber,
-    }));
-  assertWithinInputLimit("san-token-count", tokens.length, limits.maxSanTokens);
+  const tokens: SanToken[] = [];
+  let rawToken = "";
+  let inSemicolonComment = false;
+  let noClosingBraceRemains = false;
+
+  const emitToken = (rawValue: string) => {
+    const value = rawValue.replace(/^\d+\.(?:\.\.)?/, "");
+    if (
+      !value
+      || /^\.+$/.test(value)
+      || /^(?:1-0|0-1|1\/2-1\/2|\*)$/.test(value)
+    ) {
+      return;
+    }
+
+    const nextCount = tokens.length + 1;
+    assertWithinInputLimit("san-token-count", nextCount, limits.maxSanTokens);
+    if (value !== "(" && value !== ")") moveNumber += 1;
+    tokens.push({ value, moveNumber });
+  };
+
+  const flushToken = () => {
+    if (!rawToken) return;
+    const value = rawToken;
+    rawToken = "";
+    emitToken(value);
+  };
+
+  for (let index = bodyStart; index < text.length; index += 1) {
+    const character = text[index];
+
+    if (inSemicolonComment) {
+      if (character === "\r" || character === "\n") inSemicolonComment = false;
+      continue;
+    }
+
+    if (character === "{" && !noClosingBraceRemains) {
+      const commentEnd = text.indexOf("}", index + 1);
+      if (commentEnd >= 0) {
+        flushToken();
+        index = commentEnd;
+        continue;
+      }
+      noClosingBraceRemains = true;
+    }
+
+    if (character === ";") {
+      flushToken();
+      inSemicolonComment = true;
+      continue;
+    }
+
+    if (character === "$" && isDecimalDigit(text[index + 1])) {
+      flushToken();
+      let digitEnd = index + 2;
+      while (digitEnd < text.length && isDecimalDigit(text[digitEnd])) digitEnd += 1;
+      index = digitEnd - 1;
+      continue;
+    }
+
+    if (character === "(" || character === ")") {
+      flushToken();
+      emitToken(character);
+      continue;
+    }
+
+    if (/\s/.test(character)) {
+      flushToken();
+      continue;
+    }
+
+    rawToken += character;
+  }
+
+  flushToken();
   return tokens;
+}
+
+function isDecimalDigit(value: string | undefined) {
+  return value !== undefined && value >= "0" && value <= "9";
 }
 
 function parseSequence(
   tokens: SanToken[],
   startIndex: number,
   prefix: string[],
-  startFen: string | undefined,
+  positionFen: string,
   expectClose: boolean,
   nestingDepth: number,
   outputBudget: SanOutputBudget,
@@ -296,20 +421,23 @@ function parseSequence(
 ): ParsedSequence {
   const moves = [...prefix];
   const variationLines: string[][] = [];
-  const chess = replayLine(moves, startFen);
+  const chess = new Chess(positionFen);
+  let precedingMoveFen: string | null = null;
   let index = startIndex;
 
   while (index < tokens.length) {
     const token = tokens[index];
     if (token.value === "(") {
-      if (!moves.length) throw new SanParseError(moves, token.value, token.moveNumber + 1);
+      if (!precedingMoveFen) {
+        throw new SanParseError(moves, token.value, token.moveNumber + 1);
+      }
       const nextNestingDepth = nestingDepth + 1;
       assertWithinInputLimit("san-nesting", nextNestingDepth, limits.maxSanNesting);
       const variation = parseSequence(
         tokens,
         index + 1,
         moves.slice(0, -1),
-        startFen,
+        precedingMoveFen,
         true,
         nextNestingDepth,
         outputBudget,
@@ -337,6 +465,7 @@ function parseSequence(
       const played = chess.move(token.value);
       if (!played) throw new Error("Illegal SAN move");
       moves.push(played.san);
+      precedingMoveFen = played.before;
       assertWithinInputLimit("depth", moves.length, limits.maxDepth);
     } catch (error) {
       if (error instanceof InputLimitError) throw error;
@@ -361,12 +490,12 @@ function registerSanOutputLine(
   limits: InputLimits,
 ) {
   const nextLines = outputBudget.lines + 1;
-  assertWithinInputLimit("san-output-lines", nextLines, limits.maxSanOutputLines);
   assertWithinInputLimit("line-count", nextLines, limits.maxLines);
+  assertWithinInputLimit("san-output-lines", nextLines, limits.maxSanOutputLines);
 
   const nextPlies = outputBudget.plies + linePlies;
-  assertWithinInputLimit("san-output-plies", nextPlies, limits.maxSanOutputPlies);
   assertWithinInputLimit("total-plies", nextPlies, limits.maxTotalPlies);
+  assertWithinInputLimit("san-output-plies", nextPlies, limits.maxSanOutputPlies);
 
   outputBudget.lines = nextLines;
   outputBudget.plies = nextPlies;
@@ -387,12 +516,6 @@ function assertSanNodeBudget(lines: readonly (readonly string[])[], limits: Inpu
       assertWithinInputLimit("node-count", nodeCount, limits.maxNodes);
     }
   }
-}
-
-function replayLine(moves: string[], startFen?: string) {
-  const chess = startFen ? new Chess(startFen) : new Chess();
-  for (const move of moves) chess.move(move);
-  return chess;
 }
 
 function invalidValidationResult(

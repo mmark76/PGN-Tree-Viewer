@@ -1,19 +1,21 @@
 "use client";
 
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
-import type { ChangeEvent } from "react";
+import type { ChangeEvent, ClipboardEvent } from "react";
 import { importErrorMessage, importProgressLabel, messages } from "../i18n";
 import type { Locale } from "../i18n";
 import type { ImportProgress, ImportWorkerResponse } from "../services/importPipeline";
 import { DEFAULT_INPUT_LIMITS } from "../services/inputLimits";
 import { useModalFocus } from "../services/modalFocus";
-import { acceptSanInput } from "../services/sanInput";
+import { acceptSanInput, insertSanInput } from "../services/sanInput";
 import type { SanInputResult } from "../services/sanInput";
 import type { SanValidationResult } from "../services/sanParser";
 import { createSanPasteState, sanPasteReducer } from "../services/sanPasteState";
 import type { SanValidationFailure } from "../services/sanPasteState";
 
 const SAN_VALIDATION_DEBOUNCE_MS = 300;
+
+const normalizeTextareaNewlines = (value: string) => value.replace(/\r\n?/g, "\n");
 
 type SanPastePanelProps = {
   locale: Locale;
@@ -50,14 +52,20 @@ export function SanPastePanel({
   const validationWorkerRef = useRef<Worker | null>(null);
   const validationRequestIdRef = useRef(0);
   const validationTimeoutRef = useRef<number | null>(null);
+  const clipboardRequestIdRef = useRef(0);
   const [state, dispatch] = useReducer(sanPasteReducer, undefined, createSanPasteState);
   const [clipboardError, setClipboardError] = useState(false);
   useModalFocus({ dialogRef, initialFocusRef: textareaRef, onClose });
+
+  const invalidateClipboardRead = useCallback(() => {
+    clipboardRequestIdRef.current += 1;
+  }, []);
 
   useEffect(() => {
     const dialog = dialogRef.current;
     const wasBuilding = previousBuildingRef.current;
     previousBuildingRef.current = building;
+    if (building !== wasBuilding) invalidateClipboardRead();
     if (!dialog) return;
 
     if (building) {
@@ -68,7 +76,7 @@ export function SanPastePanel({
     if (wasBuilding && !dialog.contains(dialog.ownerDocument.activeElement)) {
       textareaRef.current?.focus({ preventScroll: true });
     }
-  }, [building]);
+  }, [building, invalidateClipboardRead]);
 
   const stopValidationResources = useCallback(() => {
     if (validationTimeoutRef.current !== null) {
@@ -159,7 +167,10 @@ export function SanPastePanel({
     };
   }, [beginValidation, building, state.value, stopValidationResources]);
 
-  useEffect(() => () => stopValidationResources(), [stopValidationResources]);
+  useEffect(() => () => {
+    invalidateClipboardRead();
+    stopValidationResources();
+  }, [invalidateClipboardRead, stopValidationResources]);
 
   const acceptInput = (result: SanInputResult, action: "edit" | "replace") => {
     if (!result.accepted) {
@@ -172,17 +183,43 @@ export function SanPastePanel({
   };
 
   const editInput = (event: ChangeEvent<HTMLTextAreaElement>) => {
+    invalidateClipboardRead();
     acceptInput(acceptSanInput(event.target.value), "edit");
   };
 
+  const pasteInput = (event: ClipboardEvent<HTMLTextAreaElement>) => {
+    // Keep every valid paste on the browser's native path. We only intervene
+    // when the complete clipboard insertion would exceed the input budget,
+    // because maxlength otherwise hides the original clipboard length and can
+    // silently constrain the inserted text before onChange sees it.
+    invalidateClipboardRead();
+    const insertedValue = normalizeTextareaNewlines(event.clipboardData.getData("text"));
+    if (!insertedValue) return;
+
+    const textarea = event.currentTarget;
+    const start = textarea.selectionStart ?? textarea.value.length;
+    const end = textarea.selectionEnd ?? start;
+    const result = insertSanInput(textarea.value, insertedValue, start, end);
+    if (result.accepted) return;
+
+    event.preventDefault();
+    acceptInput(result, "edit");
+  };
+
   const pasteClipboard = async () => {
+    const requestId = clipboardRequestIdRef.current + 1;
+    clipboardRequestIdRef.current = requestId;
     try {
-      const clipboardText = await navigator.clipboard.readText();
+      const clipboardText = normalizeTextareaNewlines(await navigator.clipboard.readText());
+      const textarea = textareaRef.current;
+      if (requestId !== clipboardRequestIdRef.current || !textarea || textarea.disabled) return;
       acceptInput(acceptSanInput(clipboardText), "replace");
       setClipboardError(false);
     } catch {
+      const textarea = textareaRef.current;
+      if (requestId !== clipboardRequestIdRef.current || !textarea || textarea.disabled) return;
       setClipboardError(true);
-      textareaRef.current?.focus();
+      textarea.focus();
     }
   };
 
@@ -233,6 +270,7 @@ export function SanPastePanel({
             maxLength={DEFAULT_INPUT_LIMITS.maxSanCharacters}
             placeholder="1. e4 e5 2. Nf3 Nc6 3. Bb5"
             onChange={editInput}
+            onPaste={pasteInput}
             disabled={building}
             spellCheck={false}
           />
