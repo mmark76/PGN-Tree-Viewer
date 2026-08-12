@@ -165,7 +165,7 @@ test("normalizes saved appearance settings", () => {
   assert.equal(settings.font, "modern");
 });
 
-test("uses the compact serif appearance as the default", () => {
+test("uses the screenshot-sized compact board and serif appearance as the default", () => {
   assert.deepEqual(DEFAULT_SETTINGS, {
     accentColor: "#173f32",
     lightSquareColor: "#f0d9b5",

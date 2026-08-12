@@ -15,7 +15,7 @@
   --ui-font: Arial, Helvetica, sans-serif;
   --heading-font: Georgia, serif;
   --font-step: 0px;
-  --inspector-width: 400px;
+  --inspector-width: 440px;
 }
 
 * {
@@ -73,7 +73,7 @@ button {
 
 .app-shell[data-text-size="small"] { --font-step: -1px; }
 .app-shell[data-text-size="large"] { --font-step: 2px; }
-.app-shell[data-board-size="compact"] { --inspector-width: 340px; }
+.app-shell[data-board-size="compact"] { --inspector-width: 412px; }
 .app-shell[data-board-size="large"] { --inspector-width: 480px; }
 
 .app-shell button,
