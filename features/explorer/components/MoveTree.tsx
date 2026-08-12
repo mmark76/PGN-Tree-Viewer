@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type {
+  CSSProperties,
   KeyboardEvent as ReactKeyboardEvent,
   MouseEvent as ReactMouseEvent,
+  PointerEvent as ReactPointerEvent,
 } from "react";
 import type { TreeNode } from "../types";
 import { fitTreeZoom, layoutTree, smartFitTreeZoom } from "../services/treeLayout";
@@ -10,11 +12,14 @@ import { createAnimationFrameScheduler } from "../services/viewportScheduler";
 import {
   getCollapseControlPosition,
   getNavigatorKeyCommand,
+  getNavigatorLensPercentage,
+  getNavigatorTreePoint,
   getTreeKeyboardAction,
   getVisibleTreeItems,
   shouldShowPointerCollapseControls,
 } from "../services/treeNavigation";
 import { usePrefersReducedMotion } from "../services/reducedMotion";
+import { TREE_PANEL_RESIZE_COMMIT_EVENT } from "../services/treePanelResize";
 import { gamesLabel, messages } from "../i18n";
 import type { Locale } from "../i18n";
 import type { TreeDirection } from "../settings";
@@ -49,8 +54,12 @@ export function MoveTree({
   const text = messages[locale];
   const reduceMotion = usePrefersReducedMotion();
   const viewportRef = useRef<HTMLDivElement>(null);
+  const navigatorSvgRef = useRef<SVGSVGElement>(null);
   const navigatorWindowRef = useRef<SVGRectElement>(null);
+  const navigatorLensRef = useRef<HTMLSpanElement>(null);
   const navigatorVisibilityRef = useRef(false);
+  const navigatorLensFrameRef = useRef<number | null>(null);
+  const pendingNavigatorPointRef = useRef<{ x: number; y: number } | null>(null);
   const treeItemRefs = useRef(new Map<string, HTMLButtonElement>());
   const [showNavigator, setShowNavigator] = useState(false);
   const [focusedId, setFocusedId] = useState(selectedId);
@@ -108,10 +117,27 @@ export function MoveTree({
     const viewport = viewportRef.current;
     if (!viewport) return;
 
-    fitTree();
-    const observer = new ResizeObserver(fitTree);
+    const treePanel = viewport.closest<HTMLElement>(".tree-section");
+    const fitUnlessPanelIsResizing = () => {
+      if (treePanel?.dataset.treeResizing === "true") return;
+      fitTree();
+    };
+    const view = viewport.ownerDocument.defaultView;
+    if (!view) return;
+    const scheduler = createAnimationFrameScheduler(
+      fitUnlessPanelIsResizing,
+      view.requestAnimationFrame.bind(view),
+      view.cancelAnimationFrame.bind(view),
+    );
+    scheduler.schedule();
+    const observer = new ResizeObserver(scheduler.schedule);
     observer.observe(viewport);
-    return () => observer.disconnect();
+    treePanel?.addEventListener(TREE_PANEL_RESIZE_COMMIT_EVENT, scheduler.schedule);
+    return () => {
+      observer.disconnect();
+      treePanel?.removeEventListener(TREE_PANEL_RESIZE_COMMIT_EVENT, scheduler.schedule);
+      scheduler.cancel();
+    };
   }, [fitRequest, fitTree, viewMode]);
 
   useEffect(() => {
@@ -157,32 +183,110 @@ export function MoveTree({
     };
   }, [layout.height, layout.width, zoom]);
 
-  const scrollToTreePoint = useCallback((treeX: number, treeY: number) => {
+  const scrollToTreePoint = useCallback((
+    treeX: number,
+    treeY: number,
+    behavior: ScrollBehavior = reduceMotion ? "auto" : "smooth",
+  ) => {
     const viewport = viewportRef.current;
     if (!viewport) return;
     viewport.scrollTo({
       left: treeX * zoom - viewport.clientWidth / 2,
       top: treeY * zoom - viewport.clientHeight / 2,
-      behavior: reduceMotion ? "auto" : "smooth",
+      behavior,
     });
   }, [reduceMotion, zoom]);
+
+  const moveNavigatorLens = useCallback((treeX: number, treeY: number) => {
+    const lens = navigatorLensRef.current;
+    if (lens) {
+      const xPercent = getNavigatorLensPercentage(treeX, layout.width);
+      const yPercent = getNavigatorLensPercentage(treeY, layout.height);
+      lens.style.setProperty("--navigator-lens-x", `${xPercent}%`);
+      lens.style.setProperty("--navigator-lens-y", `${yPercent}%`);
+    }
+    pendingNavigatorPointRef.current = { x: treeX, y: treeY };
+    if (navigatorLensFrameRef.current !== null) return;
+    const view = viewportRef.current?.ownerDocument.defaultView;
+    if (!view) return;
+    navigatorLensFrameRef.current = view.requestAnimationFrame(() => {
+      navigatorLensFrameRef.current = null;
+      const point = pendingNavigatorPointRef.current;
+      pendingNavigatorPointRef.current = null;
+      if (point) scrollToTreePoint(point.x, point.y, "auto");
+    });
+  }, [layout.height, layout.width, scrollToTreePoint]);
+  const navigatorNodeRadius = Math.max(5, Math.min(12, Math.min(layout.width, layout.height) / 70));
+  const selectedNode = positionedNodes.get(selectedId);
+
+  useEffect(() => () => {
+    const view = viewportRef.current?.ownerDocument.defaultView;
+    if (navigatorLensFrameRef.current !== null && view) {
+      view.cancelAnimationFrame(navigatorLensFrameRef.current);
+    }
+    navigatorLensFrameRef.current = null;
+    pendingNavigatorPointRef.current = null;
+  }, []);
+
+  useEffect(() => {
+    if (selectedNode) {
+      const lens = navigatorLensRef.current;
+      if (!lens) return;
+      const xPercent = getNavigatorLensPercentage(selectedNode.x, layout.width);
+      const yPercent = getNavigatorLensPercentage(selectedNode.y, layout.height);
+      lens.style.setProperty("--navigator-lens-x", `${xPercent}%`);
+      lens.style.setProperty("--navigator-lens-y", `${yPercent}%`);
+    }
+  }, [layout.height, layout.width, selectedNode]);
+
+  const navigateLensFromClient = useCallback((
+    clientX: number,
+    clientY: number,
+  ) => {
+    const bounds = navigatorSvgRef.current?.getBoundingClientRect();
+    if (!bounds) return;
+    const point = getNavigatorTreePoint(
+      bounds,
+      clientX,
+      clientY,
+      layout.width,
+      layout.height,
+    );
+    if (point) moveNavigatorLens(point.x, point.y);
+  }, [layout.height, layout.width, moveNavigatorLens]);
 
   const navigateFromOverview = (event: ReactMouseEvent<HTMLButtonElement>) => {
     if (event.detail === 0) {
       const selected = positionedNodes.get(selectedId);
-      if (selected) scrollToTreePoint(selected.x, selected.y);
+      if (selected) moveNavigatorLens(selected.x, selected.y);
       return;
     }
-    const bounds = event.currentTarget.getBoundingClientRect();
-    if (!bounds.width || !bounds.height) return;
-
-    const treeX = ((event.clientX - bounds.left) / bounds.width) * layout.width;
-    const treeY = ((event.clientY - bounds.top) / bounds.height) * layout.height;
-    scrollToTreePoint(treeX, treeY);
+    navigateLensFromClient(event.clientX, event.clientY);
   };
 
-  const navigatorNodeRadius = Math.max(5, Math.min(12, Math.min(layout.width, layout.height) / 70));
-  const selectedNode = positionedNodes.get(selectedId);
+  const moveLensFromPointer = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    navigateLensFromClient(event.clientX, event.clientY);
+  };
+
+  const beginLensPointer = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    event.preventDefault();
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+    moveLensFromPointer(event);
+  };
+
+  const endLensPointer = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    moveLensFromPointer(event);
+    if (event.currentTarget.hasPointerCapture?.(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+  };
+
+  const cancelLensPointer = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    if (event.currentTarget.hasPointerCapture?.(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+  };
+
   const handleNavigatorKeyDown = (event: ReactKeyboardEvent<HTMLButtonElement>) => {
     const command = getNavigatorKeyCommand(event.key);
     if (!command) return;
@@ -195,7 +299,7 @@ export function MoveTree({
     const verticalStep = Math.max(48, viewport.clientHeight * 0.3);
 
     if (command === "center-selected") {
-      if (selectedNode) scrollToTreePoint(selectedNode.x, selectedNode.y);
+      if (selectedNode) moveNavigatorLens(selectedNode.x, selectedNode.y);
       return;
     }
 
@@ -398,42 +502,59 @@ export function MoveTree({
           type="button"
           className="tree-navigator-map"
           aria-label={`${text.treeNavigator}. ${text.treeNavigatorHint}`}
+          aria-describedby="tree-navigator-lens-description"
           aria-controls="move-tree-viewport"
+          title={text.treeNavigatorLensHint}
           onClick={navigateFromOverview}
+          onPointerDown={beginLensPointer}
+          onPointerMove={moveLensFromPointer}
+          onPointerUp={endLensPointer}
+          onPointerCancel={cancelLensPointer}
           onKeyDown={handleNavigatorKeyDown}
         >
-          <svg
-            viewBox={`0 0 ${layout.width} ${layout.height}`}
-            preserveAspectRatio="none"
-            aria-hidden="true"
-            focusable="false"
-          >
-            {navigatorGraph}
-            {selectedNode && (
-              <circle
-                cx={selectedNode.x}
-                cy={selectedNode.y}
-                r={navigatorNodeRadius}
-                className="selected"
+          <span id="tree-navigator-lens-description" className="visually-hidden">
+            {text.treeNavigatorLensHint}
+          </span>
+          <span className="tree-navigator-visual" aria-hidden="true">
+            <svg
+              ref={navigatorSvgRef}
+              viewBox={`0 0 ${layout.width} ${layout.height}`}
+              preserveAspectRatio="none"
+              aria-hidden="true"
+              focusable="false"
+            >
+              {navigatorGraph}
+              {selectedNode && (
+                <circle
+                  cx={selectedNode.x}
+                  cy={selectedNode.y}
+                  r={navigatorNodeRadius}
+                  className="selected"
+                />
+              )}
+              <rect
+                ref={navigatorWindowRef}
+                className="tree-navigator-window"
+                x={0}
+                y={0}
+                width={0}
+                height={0}
               />
-            )}
-            <rect
-              ref={navigatorWindowRef}
-              className="tree-navigator-window"
-              x={0}
-              y={0}
-              width={0}
-              height={0}
-            />
-            {selectedNode && (
-              <circle
-                className="tree-navigator-selection"
-                cx={selectedNode.x}
-                cy={selectedNode.y}
-                r={navigatorNodeRadius * 2}
-              />
-            )}
-          </svg>
+            </svg>
+            <span
+              ref={navigatorLensRef}
+              className="tree-navigator-lens"
+              style={{
+                "--navigator-lens-x": `${getNavigatorLensPercentage(selectedNode?.x ?? layout.width / 2, layout.width)}%`,
+                "--navigator-lens-y": `${getNavigatorLensPercentage(selectedNode?.y ?? layout.height / 2, layout.height)}%`,
+              } as CSSProperties}
+            >
+              <span className="tree-navigator-lens-ring">
+                <span className="tree-navigator-lens-core" />
+              </span>
+              <span className="tree-navigator-lens-handle" />
+            </span>
+          </span>
         </button>
       </div>
     </div>

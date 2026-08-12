@@ -53,12 +53,18 @@ import {
   revealSelectionAncestors,
 } from "../services/treeSelection";
 import {
+  canShrinkVariations as canShrinkVariationState,
+  expandableNodeIds,
+  shrinkVariationIdsFromIndex,
+} from "../services/treeVariations";
+import {
   isExplorerDataMutationLocked,
 } from "../services/explorerTaskLock";
 import type { ExplorerDataTask } from "../services/explorerTaskLock";
 import { DEFAULT_SETTINGS, readStoredSettings, storeSettings } from "../settings";
 import type { ExplorerSettings } from "../settings";
 import type { LineRecord, TreeNode } from "../types";
+import type { TreePanelSize } from "../services/treePanelResize";
 import { ExplorerFooter } from "./ExplorerFooter";
 import { ExplorerHeader } from "./ExplorerHeader";
 import { MoveTree } from "./MoveTree";
@@ -67,6 +73,7 @@ import { SettingsPanel } from "./SettingsPanel";
 import { DownloadPanel } from "./DownloadPanel";
 import { SanPastePanel } from "./SanPastePanel";
 import { PromotionDialog } from "./PromotionDialog";
+import { TreeResizeHandles } from "./TreeResizeHandles";
 import type { DownloadFormat } from "./DownloadPanel";
 
 export type TreeViewMode = "smart" | "overview" | "manual";
@@ -130,13 +137,29 @@ export function ExplorerShell() {
   const [contentDirty, setContentDirty] = useState(false);
   const [undoSnapshot, setUndoSnapshot] = useState<ExplorerSnapshot | null>(null);
   const [pendingPromotion, setPendingPromotion] = useState<PendingPromotion | null>(null);
+  const [treePanelSize, setTreePanelSize] = useState<TreePanelSize>({ width: null, height: null });
   const selected = index.get(selectedId) ?? tree;
   const hasTree = tree.children.length > 0;
+  const expandableBranches = useMemo(() => expandableNodeIds(tree), [tree]);
+  const canExpandVariations = [...expandableBranches].some((id) => collapsedIds.has(id));
+  const canShrinkVariations = canShrinkVariationState(
+    index,
+    expandableBranches,
+    collapsedIds,
+    tree.id,
+    selected.id,
+  );
   const text = messages[locale];
   const appStyle = {
     "--forest": settings.accentColor,
     "--forest-2": settings.accentColor,
   } as CSSProperties;
+  const workspaceStyle = treePanelSize.width === null
+    ? undefined
+    : { "--tree-panel-width": `${treePanelSize.width}px` } as CSSProperties;
+  const treeSectionStyle = treePanelSize.height === null
+    ? undefined
+    : { "--tree-panel-height": `${treePanelSize.height}px` } as CSSProperties;
   const dataMutationLocked = importing || pendingPromotion !== null;
 
   const captureSnapshot = (): ExplorerSnapshot => ({
@@ -393,6 +416,31 @@ export function ExplorerShell() {
     });
   };
 
+  const revealSelectedAfterVariationChange = () => {
+    window.requestAnimationFrame(() => {
+      treeSectionRef.current
+        ?.querySelector<HTMLElement>('[role="treeitem"][aria-selected="true"]')
+        ?.scrollIntoView?.({ block: "nearest", inline: "nearest" });
+    });
+  };
+
+  const expandVariations = () => {
+    if (!canExpandVariations) return;
+    setCollapsedIds(new Set());
+    revealSelectedAfterVariationChange();
+  };
+
+  const shrinkVariations = () => {
+    if (!canShrinkVariations) return;
+    setCollapsedIds(shrinkVariationIdsFromIndex(
+      index,
+      expandableBranches,
+      tree.id,
+      selected.id,
+    ));
+    revealSelectedAfterVariationChange();
+  };
+
   const buildManualLines = (
     nextLines: LineRecord[],
     successMessage: string,
@@ -601,8 +649,18 @@ export function ExplorerShell() {
         }}
         onOpenSettings={() => setSettingsOpen(true)}
       />
-      <main className="workspace">
-        <section ref={treeSectionRef} className="tree-section" id="move-tree">
+      <main
+        className="workspace"
+        data-tree-width-resized={treePanelSize.width !== null}
+        style={workspaceStyle}
+      >
+        <section
+          ref={treeSectionRef}
+          className="tree-section"
+          id="move-tree"
+          data-tree-height-resized={treePanelSize.height !== null}
+          style={treeSectionStyle}
+        >
           <div className="tree-header">
             <div className="tree-heading">
               <strong>{text.moveTree}</strong>
@@ -637,7 +695,28 @@ export function ExplorerShell() {
                 >
                   ⛶
                 </button>
-                <button className="icon-button" type="button" onClick={() => setCollapsedIds(new Set())} aria-label={text.expandAll}>↗</button>
+                <div className="tree-variation-controls" role="group" aria-label={text.variationControls}>
+                  <button
+                    className="button tree-variation-button"
+                    type="button"
+                    onClick={expandVariations}
+                    disabled={!canExpandVariations}
+                    aria-label={text.expandVariations}
+                    title={text.expandVariationsHint}
+                  >
+                    {text.expandVariations}
+                  </button>
+                  <button
+                    className="button tree-variation-button"
+                    type="button"
+                    onClick={shrinkVariations}
+                    disabled={!canShrinkVariations}
+                    aria-label={text.shrinkVariations}
+                    title={text.shrinkVariationsHint}
+                  >
+                    {text.shrinkVariations}
+                  </button>
+                </div>
               </div>
             ) : (
               <button className="button" type="button" onClick={openFilePicker} disabled={dataMutationLocked}>
@@ -680,6 +759,12 @@ export function ExplorerShell() {
           ) : (
             <div className="tree-empty" aria-label={text.emptyTreeArea} />
           )}
+          <TreeResizeHandles
+            sectionRef={treeSectionRef}
+            size={treePanelSize}
+            locale={locale}
+            onResize={setTreePanelSize}
+          />
         </section>
         <PositionInspector
           node={selected}
