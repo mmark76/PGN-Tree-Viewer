@@ -637,7 +637,6 @@ export function ExplorerShell() {
         onChange={importFile}
       />
       <ExplorerHeader
-        sourceLabel={fileName || text.noPgnSource}
         importing={importing}
         importProgress={importProgress.percent}
         importProgressLabel={importProgressLabel(locale, importProgress.stage, importProgress.percent)}

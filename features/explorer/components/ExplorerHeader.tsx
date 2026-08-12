@@ -2,7 +2,6 @@ import { messages } from "../i18n";
 import type { Locale } from "../i18n";
 
 type ExplorerHeaderProps = {
-  sourceLabel: string;
   importing: boolean;
   importProgress: number;
   importProgressLabel: string;
@@ -18,7 +17,6 @@ type ExplorerHeaderProps = {
 };
 
 export function ExplorerHeader({
-  sourceLabel,
   importing,
   importProgress,
   importProgressLabel,
@@ -41,10 +39,7 @@ export function ExplorerHeader({
           <p className="header-eyebrow">{text.eyebrow}</p>
           <div className="header-title-row">
             <div className="brand-mark" aria-hidden="true">♘</div>
-            <div>
-              <h1>Chess Tree Builder</h1>
-              <p className="header-source">{sourceLabel}</p>
-            </div>
+            <h1>Chess Tree Builder</h1>
           </div>
         </div>
 
@@ -96,11 +91,6 @@ export function ExplorerHeader({
         </div>
       </div>
 
-      <nav className="primary-nav" aria-label={text.mainNavigation}>
-        <a className="active" href="#top">{text.home}</a>
-        <a href="#move-tree">{text.moveTree}</a>
-        <a href="#position-board">{text.board}</a>
-      </nav>
     </header>
   );
 }
