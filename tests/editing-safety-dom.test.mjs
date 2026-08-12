@@ -266,6 +266,8 @@ test("mounted editing flow promotes exactly once, confirms replacement, preserve
   try {
     await act(async () => root.render(React.createElement(ExplorerShell)));
     await environment.flushFrames();
+    assert.equal(document.querySelector(".primary-nav"), null);
+    assert.equal(document.querySelector(".header-source"), null);
 
     await selectFile("custom-start.pgn");
     assert.equal(WorkerStub.instances.length, 1);
@@ -277,15 +279,9 @@ test("mounted editing flow promotes exactly once, confirms replacement, preserve
     const expandVariations = buttonNamed("Expand Variations");
     const shrinkVariations = buttonNamed("Shrink Variations");
     assert.equal(expandVariations.disabled, true);
-    assert.equal(shrinkVariations.disabled, false);
-    await click(shrinkVariations);
-    assert.equal(document.querySelectorAll('[role="treeitem"]').length, 1);
-    assert.equal(rootTreeItem()?.getAttribute("aria-selected"), "true");
     assert.equal(shrinkVariations.disabled, true);
-    assert.equal(expandVariations.disabled, false);
-    await click(expandVariations);
     assert.equal(document.querySelectorAll('[role="treeitem"]').length, 2);
-    assert.equal(expandVariations.disabled, true);
+    assert.equal(rootTreeItem()?.getAttribute("aria-selected"), "true");
 
     clipboardValue = "Kb2";
     await click(buttonNamed("Paste SAN / PGN"));
@@ -396,7 +392,8 @@ test("mounted editing flow promotes exactly once, confirms replacement, preserve
     await environment.flushFrames();
     assert.equal(buttonNamed("Undo replacement"), undefined);
     assert.equal(document.querySelector(".app-shell").dataset.contentDirty, "true");
-    assert.match(document.querySelector(".header-source")?.textContent ?? "", /custom-start\.pgn/);
+    assert.equal(document.querySelector(".header-source"), null);
+    assert.match(document.querySelector(".tree-heading")?.textContent ?? "", /custom-start\.pgn/);
     assert.equal(document.querySelector('[data-square="e7"] [data-piece="wP"]') !== null, true);
     assert.equal(document.querySelectorAll('[role="treeitem"]').length, 1);
     assert.equal(rootTreeItem()?.getAttribute("aria-selected"), "true");

@@ -64,7 +64,10 @@ import type { ExplorerDataTask } from "../services/explorerTaskLock";
 import { DEFAULT_SETTINGS, readStoredSettings, storeSettings } from "../settings";
 import type { ExplorerSettings } from "../settings";
 import type { LineRecord, TreeNode } from "../types";
-import type { TreePanelSize } from "../services/treePanelResize";
+import {
+  DEFAULT_TREE_PANEL_SIZE,
+  type TreePanelSize,
+} from "../services/treePanelResize";
 import { ExplorerFooter } from "./ExplorerFooter";
 import { ExplorerHeader } from "./ExplorerHeader";
 import { MoveTree } from "./MoveTree";
@@ -137,7 +140,9 @@ export function ExplorerShell() {
   const [contentDirty, setContentDirty] = useState(false);
   const [undoSnapshot, setUndoSnapshot] = useState<ExplorerSnapshot | null>(null);
   const [pendingPromotion, setPendingPromotion] = useState<PendingPromotion | null>(null);
-  const [treePanelSize, setTreePanelSize] = useState<TreePanelSize>({ width: null, height: null });
+  const [treePanelSize, setTreePanelSize] = useState<TreePanelSize>(() => ({
+    ...DEFAULT_TREE_PANEL_SIZE,
+  }));
   const selected = index.get(selectedId) ?? tree;
   const hasTree = tree.children.length > 0;
   const expandableBranches = useMemo(() => expandableNodeIds(tree), [tree]);
@@ -632,7 +637,6 @@ export function ExplorerShell() {
         onChange={importFile}
       />
       <ExplorerHeader
-        sourceLabel={fileName || text.noPgnSource}
         importing={importing}
         importProgress={importProgress.percent}
         importProgressLabel={importProgressLabel(locale, importProgress.stage, importProgress.percent)}

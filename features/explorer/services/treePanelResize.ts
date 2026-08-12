@@ -3,6 +3,11 @@ export type TreePanelSize = {
   height: number | null;
 };
 
+export const DEFAULT_TREE_PANEL_SIZE: TreePanelSize = {
+  width: null,
+  height: 590,
+};
+
 export type TreeResizeAxis = "width" | "height" | "both";
 
 export type TreeResizeBounds = {

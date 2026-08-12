@@ -1080,6 +1080,9 @@ test("reduced-motion, short-dialog scrolling, and collapse touch targets are exp
   assert.equal(prefersReducedMotion(null), false);
 
   const css = await readFile(new URL("app/globals.css", workspaceUrl), "utf8");
+  assert.match(css, /\.app-shell\[data-board-size="compact"\]\s*\{\s*--inspector-width:\s*412px/);
+  assert.match(css, /\.board-wrap\s*\{[\s\S]*?padding:\s*16px/);
+  assert.match(css, /\.board-frame\s*\{[\s\S]*?padding:\s*6px;[\s\S]*?border:\s*1px/);
   assert.match(css, /@media\s*\(prefers-reduced-motion:\s*reduce\)/);
   assert.match(css, /@media\s*\(prefers-reduced-motion:\s*reduce\)[\s\S]*scroll-behavior:\s*auto\s*!important/);
   assert.match(css, /\.download-options\s*\{[\s\S]*?overflow-y:\s*auto/);

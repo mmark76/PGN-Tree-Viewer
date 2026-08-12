@@ -159,15 +159,15 @@ test("recursive expand and shrink retain a visible selected path", () => {
     item.children.forEach(index);
   };
   index(root);
-  assert.equal(canShrinkVariations(treeIndex, expandable, new Set(), root.id, "a2"), true);
+  assert.equal(canShrinkVariations(treeIndex, expandable, new Set(), root.id, "a2"), false);
   assert.equal(
     canShrinkVariations(treeIndex, expandable, selectedVariation, root.id, "a2"),
     false,
   );
-  assert.deepEqual([...selectedVariation], ["a1"]);
+  assert.deepEqual([...selectedVariation], []);
   assert.deepEqual(
     getVisibleTreeItems(root, selectedVariation).map(({ node: item }) => item.id),
-    ["start", "a", "a1", "a2", "b"],
+    ["start", "a", "a1", "a1a", "a2", "b"],
   );
   assert.equal(
     getVisibleTreeItems(root, selectedVariation).some(({ node: item }) => item.id === "a2"),
@@ -175,10 +175,10 @@ test("recursive expand and shrink retain a visible selected path", () => {
   );
 
   const selectedBranch = shrinkVariationIds(root, "a");
-  assert.deepEqual([...selectedBranch], ["a", "a1"]);
+  assert.deepEqual([...selectedBranch], []);
   assert.deepEqual(
     getVisibleTreeItems(root, selectedBranch).map(({ node: item }) => item.id),
-    ["start", "a", "b"],
+    ["start", "a", "a1", "a1a", "a2", "b"],
   );
   assert.equal(
     getVisibleTreeItems(root, selectedBranch).some(({ node: item }) => item.id === "a"),
@@ -186,14 +186,39 @@ test("recursive expand and shrink retain a visible selected path", () => {
   );
 
   const selectedRoot = shrinkVariationIds(root, "start");
-  assert.deepEqual([...selectedRoot], ["start", "a", "a1"]);
+  assert.deepEqual([...selectedRoot], []);
   assert.deepEqual(
     getVisibleTreeItems(root, selectedRoot).map(({ node: item }) => item.id),
-    ["start"],
+    ["start", "a", "a1", "a1a", "a2", "b"],
   );
-  assert.equal(sameCollapsedBranches(new Set(), selectedRoot, expandable), false);
-  assert.equal(sameCollapsedBranches(new Set(["start", "a", "a1"]), selectedRoot, expandable), true);
+  assert.equal(sameCollapsedBranches(new Set(), selectedRoot, expandable), true);
+  assert.equal(sameCollapsedBranches(new Set(["start", "a", "a1"]), selectedRoot, expandable), false);
 
   const missingSelection = shrinkVariationIds(root, "missing");
-  assert.deepEqual([...missingSelection], ["start", "a", "a1"]);
+  assert.deepEqual([...missingSelection], []);
+});
+
+test("shrink keeps the complete main line while collapsing deeper side variations", () => {
+  const mainLeaf = node("main-3", "main-2");
+  const mainSecond = node("main-2", "main-1", [mainLeaf]);
+  const selectedLeaf = node("side-a-2", "side-a");
+  const selectedVariation = node("side-a", "main-1", [selectedLeaf]);
+  const mainFirst = node("main-1", "start", [mainSecond, selectedVariation]);
+  const otherLeaf = node("side-b-2", "side-b");
+  const otherVariation = node("side-b", "start", [otherLeaf]);
+  const root = node("start", null, [mainFirst, otherVariation]);
+
+  const collapsed = shrinkVariationIds(root, selectedLeaf.id);
+  assert.deepEqual([...collapsed], [otherVariation.id]);
+  assert.deepEqual(
+    getVisibleTreeItems(root, collapsed).map(({ node: item }) => item.id),
+    ["start", "main-1", "main-2", "main-3", "side-a", "side-a-2", "side-b"],
+  );
+
+  const rootSelected = shrinkVariationIds(root, root.id);
+  assert.deepEqual([...rootSelected], [selectedVariation.id, otherVariation.id]);
+  assert.deepEqual(
+    getVisibleTreeItems(root, rootSelected).map(({ node: item }) => item.id),
+    ["start", "main-1", "main-2", "main-3", "side-a", "side-b"],
+  );
 });
