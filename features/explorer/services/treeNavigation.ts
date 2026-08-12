@@ -94,6 +94,44 @@ export function getNavigatorKeyCommand(key: string): NavigatorKeyCommand | null 
   return null;
 }
 
+export function getNavigatorTreePoint(
+  bounds: Pick<DOMRect, "left" | "top" | "width" | "height">,
+  clientX: number,
+  clientY: number,
+  treeWidth: number,
+  treeHeight: number,
+) {
+  if (
+    !Number.isFinite(bounds.left)
+    || !Number.isFinite(bounds.top)
+    || !Number.isFinite(bounds.width)
+    || !Number.isFinite(bounds.height)
+    || !Number.isFinite(clientX)
+    || !Number.isFinite(clientY)
+    || !Number.isFinite(treeWidth)
+    || !Number.isFinite(treeHeight)
+    || bounds.width <= 0
+    || bounds.height <= 0
+    || treeWidth <= 0
+    || treeHeight <= 0
+  ) {
+    return null;
+  }
+  const relativeX = Math.min(1, Math.max(0, (clientX - bounds.left) / bounds.width));
+  const relativeY = Math.min(1, Math.max(0, (clientY - bounds.top) / bounds.height));
+  return {
+    x: relativeX * treeWidth,
+    y: relativeY * treeHeight,
+  };
+}
+
+export function getNavigatorLensPercentage(treeCoordinate: number, treeExtent: number) {
+  if (!Number.isFinite(treeCoordinate) || !Number.isFinite(treeExtent) || treeExtent <= 0) {
+    return 50;
+  }
+  return Math.min(1, Math.max(0, treeCoordinate / treeExtent)) * 100;
+}
+
 export function shouldShowPointerCollapseControls(zoom: number) {
   return Number.isFinite(zoom) && zoom >= MIN_POINTER_COLLAPSE_ZOOM;
 }

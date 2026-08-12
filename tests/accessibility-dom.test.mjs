@@ -8,6 +8,8 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { JSDOM } from "jsdom";
 import { DownloadPanel } from "../features/explorer/components/DownloadPanel.tsx";
 import { MoveTree } from "../features/explorer/components/MoveTree.tsx";
+import { TreeResizeHandles } from "../features/explorer/components/TreeResizeHandles.tsx";
+import { TREE_PANEL_RESIZE_COMMIT_EVENT } from "../features/explorer/services/treePanelResize.ts";
 import { SanPastePanel } from "../features/explorer/components/SanPastePanel.tsx";
 import {
   applyModalEnvironment,
@@ -422,6 +424,20 @@ test("rendered move tree exposes ARIA metadata, unscaled touch targets, and a ke
   assert.ok(document.getElementById(navigator.getAttribute("aria-controls")));
   assert.equal(navigator.querySelector("svg")?.getAttribute("aria-hidden"), "true");
   assert.equal(navigator.querySelector("svg")?.getAttribute("focusable"), "false");
+  assert.ok(navigator.getAttribute("aria-describedby"));
+  assert.ok(document.getElementById(navigator.getAttribute("aria-describedby")));
+  const lens = navigator.querySelector(".tree-navigator-lens");
+  assert.ok(lens);
+  assert.equal(lens.tagName, "SPAN");
+  assert.equal(lens.closest("svg"), null, "the fixed-pixel lens must not inherit SVG stretching");
+
+  const lensRule = css.match(/\.tree-navigator-lens\s*\{([^}]*)\}/)?.[1] ?? "";
+  assert.match(lensRule, /left:\s*clamp\(18px,\s*var\(--navigator-lens-x\),\s*calc\(100% - 24px\)\)/);
+  assert.match(lensRule, /top:\s*clamp\(18px,\s*var\(--navigator-lens-y\),\s*calc\(100% - 24px\)\)/);
+  assert.match(lensRule, /width:\s*42px/);
+  assert.match(lensRule, /height:\s*42px/);
+  const mapRule = css.match(/\.tree-navigator-map\s*\{([^}]*)\}/)?.[1] ?? "";
+  assert.match(mapRule, /cursor:\s*none/);
 
   dom.window.close();
 });
@@ -513,6 +529,7 @@ test("mounted move tree wires roving focus, selection, collapse, and navigator s
   const previousResizeObserver = Object.getOwnPropertyDescriptor(globalThis, "ResizeObserver");
   const pendingFrames = new Map();
   let nextFrameId = 1;
+  const resizeCallbacks = new Set();
   const mediaListeners = new Set();
   const reducedMotionQuery = {
     matches: true,
@@ -536,9 +553,15 @@ test("mounted move tree wires roving focus, selection, collapse, and navigator s
   };
 
   class ResizeObserverStub {
+    constructor(callback) {
+      this.callback = callback;
+      resizeCallbacks.add(callback);
+    }
     observe() {}
     unobserve() {}
-    disconnect() {}
+    disconnect() {
+      resizeCallbacks.delete(this.callback);
+    }
   }
 
   Object.defineProperty(globalThis, "ResizeObserver", {
@@ -575,35 +598,42 @@ test("mounted move tree wires roving focus, selection, collapse, and navigator s
   const rootNode = makeNode("start", null, 0, [e4, d4]);
   const selections = [];
   const toggles = [];
+  const zoomChanges = [];
 
-  function Harness() {
+  function Harness({ zoomValue = 0.67, viewMode = "manual" }) {
     const [selectedId, setSelectedId] = React.useState("start");
     const [collapsedIds, setCollapsedIds] = React.useState(() => new Set());
 
-    return React.createElement(MoveTree, {
-      root: rootNode,
-      selectedId,
-      collapsedIds,
-      zoom: 0.67,
-      viewMode: "manual",
-      fitRequest: 0,
-      locale: "en",
-      direction: "right",
-      onZoomChange() {},
-      onSelect(id) {
-        selections.push(id);
-        setSelectedId(id);
-      },
-      onToggle(id) {
-        toggles.push(id);
-        setCollapsedIds((current) => {
-          const next = new Set(current);
-          if (next.has(id)) next.delete(id);
-          else next.add(id);
-          return next;
-        });
-      },
-    });
+    return React.createElement(
+      "section",
+      { className: "tree-section" },
+      React.createElement(MoveTree, {
+        root: rootNode,
+        selectedId,
+        collapsedIds,
+        zoom: zoomValue,
+        viewMode,
+        fitRequest: 0,
+        locale: "en",
+        direction: "right",
+        onZoomChange(value) {
+          zoomChanges.push(value);
+        },
+        onSelect(id) {
+          selections.push(id);
+          setSelectedId(id);
+        },
+        onToggle(id) {
+          toggles.push(id);
+          setCollapsedIds((current) => {
+            const next = new Set(current);
+            if (next.has(id)) next.delete(id);
+            else next.add(id);
+            return next;
+          });
+        },
+      }),
+    );
   }
 
   const host = document.createElement("div");
@@ -620,11 +650,27 @@ test("mounted move tree wires roving focus, selection, collapse, and navigator s
       }));
     });
   };
+  const flushFrames = async () => {
+    await act(async () => {
+      const callbacks = Array.from(pendingFrames.values());
+      pendingFrames.clear();
+      callbacks.forEach((callback) => callback(16));
+    });
+  };
 
   try {
     await act(async () => root.render(React.createElement(Harness)));
     const viewport = document.querySelector("#move-tree-viewport");
     const navigator = document.querySelector("button.tree-navigator-map");
+    const navigatorSvg = navigator.querySelector("svg");
+    const capturedPointers = new Set();
+    const pointerCaptureHistory = [];
+    navigator.setPointerCapture = (pointerId) => {
+      capturedPointers.add(pointerId);
+      pointerCaptureHistory.push(pointerId);
+    };
+    navigator.hasPointerCapture = (pointerId) => capturedPointers.has(pointerId);
+    navigator.releasePointerCapture = (pointerId) => capturedPointers.delete(pointerId);
     const scrollCalls = [];
     Object.defineProperties(viewport, {
       clientWidth: { configurable: true, value: 120 },
@@ -641,11 +687,7 @@ test("mounted move tree wires roving focus, selection, collapse, and navigator s
       },
     });
     assert.ok(pendingFrames.size > 0);
-    await act(async () => {
-      const callbacks = Array.from(pendingFrames.values());
-      pendingFrames.clear();
-      callbacks.forEach((callback) => callback(16));
-    });
+    await flushFrames();
     assert.equal(navigator.closest(".tree-navigator").hidden, false);
 
     const start = document.querySelector('[role="treeitem"]');
@@ -687,7 +729,7 @@ test("mounted move tree wires roving focus, selection, collapse, and navigator s
     assert.deepEqual(selections, ["e4", "d4"]);
     assert.equal(treeItem("d4").getAttribute("aria-selected"), "true");
 
-    navigator.getBoundingClientRect = () => ({
+    navigatorSvg.getBoundingClientRect = () => ({
       x: 10,
       y: 20,
       left: 10,
@@ -708,22 +750,102 @@ test("mounted move tree wires roving focus, selection, collapse, and navigator s
         detail: 1,
       }));
     });
+    await flushFrames();
     assert.equal(scrollCalls.at(-1).behavior, "auto");
     assert.equal(Number.isFinite(scrollCalls.at(-1).left), true);
     assert.equal(Number.isFinite(scrollCalls.at(-1).top), true);
+    const lens = navigator.querySelector(".tree-navigator-lens");
+    assert.equal(lens.style.getPropertyValue("--navigator-lens-x"), "50%");
+    assert.equal(lens.style.getPropertyValue("--navigator-lens-y"), "50%");
+
+    await act(async () => {
+      const pointerDown = new MouseEvent("pointerdown", {
+        bubbles: true,
+        cancelable: true,
+        clientX: 110,
+        clientY: 70,
+      });
+      Object.defineProperty(pointerDown, "pointerId", { value: 7 });
+      navigator.dispatchEvent(pointerDown);
+
+      const pointerMove = new MouseEvent("pointermove", {
+        bubbles: true,
+        cancelable: true,
+        clientX: 260,
+        clientY: -40,
+      });
+      Object.defineProperty(pointerMove, "pointerId", { value: 7 });
+      navigator.dispatchEvent(pointerMove);
+
+      const pointerUp = new MouseEvent("pointerup", {
+        bubbles: true,
+        cancelable: true,
+        clientX: 260,
+        clientY: -40,
+      });
+      Object.defineProperty(pointerUp, "pointerId", { value: 7 });
+      navigator.dispatchEvent(pointerUp);
+    });
+    assert.deepEqual(pointerCaptureHistory, [7], "drag start captures its pointer");
+    assert.equal(capturedPointers.has(7), false, "drag completion releases pointer capture");
+    assert.equal(pendingFrames.size, 1, "drag updates coalesce into one animation frame");
+    assert.equal(lens.style.getPropertyValue("--navigator-lens-x"), "100%");
+    assert.equal(lens.style.getPropertyValue("--navigator-lens-y"), "0%");
+    await flushFrames();
+    assert.deepEqual(scrollCalls.at(-1), { left: 516.2, top: -50, behavior: "auto" });
+
+    await act(async () => root.render(React.createElement(Harness, { zoomValue: 1 })));
+    Object.defineProperties(viewport, {
+      clientWidth: { configurable: true, value: 200 },
+      clientHeight: { configurable: true, value: 150 },
+    });
+    await act(async () => resizeCallbacks.forEach((callback) => callback([])));
+    await flushFrames();
+    const navigatorWindow = navigator.querySelector(".tree-navigator-window");
+    assert.equal(navigatorWindow.getAttribute("width"), "200");
+    assert.equal(navigatorWindow.getAttribute("height"), "150");
+
+    await act(async () => {
+      navigator.dispatchEvent(new MouseEvent("pointermove", {
+        bubbles: true,
+        cancelable: true,
+        clientX: 60,
+        clientY: 45,
+      }));
+    });
+    await flushFrames();
+    assert.deepEqual(scrollCalls.at(-1), { left: 115, top: 87.5, behavior: "auto" });
 
     await press(navigator, "ArrowRight");
-    assert.deepEqual(scrollCalls.at(-1), { left: 148, top: 80, behavior: "auto" });
+    assert.deepEqual(scrollCalls.at(-1), { left: 160, top: 80, behavior: "auto" });
     await press(navigator, "ArrowDown");
     assert.deepEqual(scrollCalls.at(-1), { left: 100, top: 128, behavior: "auto" });
     await press(navigator, "Home");
     assert.deepEqual(scrollCalls.at(-1), { left: 0, top: 0, behavior: "auto" });
     await press(navigator, "End");
-    assert.deepEqual(scrollCalls.at(-1), { left: 1080, top: 800, behavior: "auto" });
+    assert.deepEqual(scrollCalls.at(-1), { left: 1000, top: 750, behavior: "auto" });
     await press(navigator, "Enter");
+    await flushFrames();
     assert.equal(scrollCalls.at(-1).behavior, "auto");
     assert.equal(Number.isFinite(scrollCalls.at(-1).left), true);
     assert.equal(Number.isFinite(scrollCalls.at(-1).top), true);
+
+    await act(async () => root.render(React.createElement(Harness, {
+      zoomValue: 1,
+      viewMode: "smart",
+    })));
+    const treePanel = document.querySelector(".tree-section");
+    const fitCountBeforeDrag = zoomChanges.length;
+    treePanel.setAttribute("data-tree-resizing", "true");
+    await act(async () => resizeCallbacks.forEach((callback) => callback([])));
+    await flushFrames();
+    assert.equal(zoomChanges.length, fitCountBeforeDrag);
+    await act(async () => {
+      treePanel.removeAttribute("data-tree-resizing");
+      treePanel.dispatchEvent(new Event(TREE_PANEL_RESIZE_COMMIT_EVENT));
+    });
+    await flushFrames();
+    assert.equal(zoomChanges.length, fitCountBeforeDrag + 1);
 
     const toggleCount = toggles.length;
     await act(async () => {
@@ -735,6 +857,211 @@ test("mounted move tree wires roving focus, selection, collapse, and navigator s
     });
     assert.equal(toggles.length, toggleCount + 1);
     assert.equal(toggles.at(-1), "start");
+  } finally {
+    await act(async () => root.unmount());
+    if (previousResizeObserver) {
+      Object.defineProperty(globalThis, "ResizeObserver", previousResizeObserver);
+    } else {
+      delete globalThis.ResizeObserver;
+    }
+    environment.restore();
+  }
+});
+
+test("tree resize handles wire pointer, touch-compatible events, and keyboard sizing", async () => {
+  const environment = installDom();
+  const previousResizeObserver = Object.getOwnPropertyDescriptor(globalThis, "ResizeObserver");
+  const pendingFrames = new Map();
+  let nextFrameId = 1;
+  let harnessRenders = 0;
+
+  class ResizeObserverStub {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  }
+
+  Object.defineProperty(globalThis, "ResizeObserver", {
+    configurable: true,
+    writable: true,
+    value: ResizeObserverStub,
+  });
+  environment.dom.window.matchMedia = () => ({ matches: false });
+  environment.dom.window.requestAnimationFrame = (callback) => {
+    const id = nextFrameId++;
+    pendingFrames.set(id, callback);
+    return id;
+  };
+  environment.dom.window.cancelAnimationFrame = (id) => pendingFrames.delete(id);
+
+  function Harness() {
+    harnessRenders += 1;
+    const sectionRef = React.useRef(null);
+    const [size, setSize] = React.useState({ width: null, height: null });
+    return React.createElement(
+      "main",
+      { className: "workspace", "data-width": size.width, "data-height": size.height },
+      React.createElement(
+        "section",
+        { ref: sectionRef, className: "tree-section" },
+        React.createElement(TreeResizeHandles, {
+          sectionRef,
+          size,
+          locale: "en",
+          onResize: setSize,
+        }),
+      ),
+      React.createElement("aside", { className: "inspector" }),
+    );
+  }
+
+  const host = document.createElement("div");
+  document.body.append(host);
+  const root = createRoot(host);
+  const pointerEvent = (type, init) => {
+    const event = new MouseEvent(type, { bubbles: true, cancelable: true, ...init });
+    Object.defineProperties(event, {
+      pointerId: { configurable: true, value: 7 },
+      pointerType: { configurable: true, value: "touch" },
+    });
+    return event;
+  };
+
+  try {
+    await act(async () => root.render(React.createElement(Harness)));
+    const workspace = document.querySelector(".workspace");
+    const section = document.querySelector(".tree-section");
+    const inspector = document.querySelector(".inspector");
+    workspace.style.paddingLeft = "20px";
+    workspace.style.paddingRight = "20px";
+    workspace.style.columnGap = "10px";
+    workspace.getBoundingClientRect = () => ({ width: 1100, height: 700 });
+    section.getBoundingClientRect = () => {
+      const width = Number(workspace.getAttribute("data-width")) || 700;
+      const height = Number(workspace.getAttribute("data-height")) || 600;
+      return {
+        width,
+        height,
+        top: 120,
+        right: width,
+        bottom: 120 + height,
+        left: 0,
+        x: 0,
+        y: 120,
+        toJSON() {},
+      };
+    };
+    inspector.getBoundingClientRect = () => ({ width: 320, height: 600 });
+    const widthHandle = document.querySelector(".tree-resize-handle-width");
+    const heightHandle = document.querySelector(".tree-resize-handle-height");
+    const cornerHandle = document.querySelector(".tree-resize-handle-corner");
+    cornerHandle.setPointerCapture = () => {
+      throw new DOMException("capture unavailable");
+    };
+    cornerHandle.releasePointerCapture = () => {
+      throw new DOMException("capture already released");
+    };
+
+    assert.ok(widthHandle.getAttribute("aria-label"));
+    assert.ok(heightHandle.getAttribute("title"));
+    assert.ok(cornerHandle.getAttribute("aria-label"));
+
+    await act(async () => {
+      widthHandle.dispatchEvent(new KeyboardEvent("keydown", {
+        key: "ArrowLeft",
+        bubbles: true,
+        cancelable: true,
+      }));
+    });
+    assert.equal(workspace.getAttribute("data-width"), "676");
+
+    await act(async () => {
+      heightHandle.dispatchEvent(new KeyboardEvent("keydown", {
+        key: "End",
+        bubbles: true,
+        cancelable: true,
+      }));
+    });
+    assert.equal(workspace.getAttribute("data-height"), "632");
+    assert.equal(section.style.getPropertyValue("--tree-panel-max-height"), "632px");
+
+    const rendersBeforePointerPreview = harnessRenders;
+    await act(async () => {
+      cornerHandle.dispatchEvent(pointerEvent("pointerdown", { clientX: 700, clientY: 600 }));
+      cornerHandle.dispatchEvent(pointerEvent("pointermove", { clientX: 760, clientY: 520 }));
+    });
+    assert.equal(section.getAttribute("data-tree-resizing"), "true");
+    await act(async () => {
+      const callbacks = Array.from(pendingFrames.values());
+      pendingFrames.clear();
+      callbacks.forEach((callback) => callback(16));
+    });
+    assert.equal(harnessRenders, rendersBeforePointerPreview);
+    assert.equal(workspace.getAttribute("data-width"), "676");
+    assert.equal(workspace.getAttribute("data-height"), "632");
+    assert.equal(workspace.style.getPropertyValue("--tree-panel-width"), "730px");
+    assert.equal(section.style.getPropertyValue("--tree-panel-height"), "552px");
+
+    await act(async () => {
+      cornerHandle.dispatchEvent(pointerEvent("pointerup", { clientX: 760, clientY: 520 }));
+    });
+    assert.equal(harnessRenders, rendersBeforePointerPreview + 1);
+    assert.equal(workspace.getAttribute("data-width"), "730");
+    assert.equal(workspace.getAttribute("data-height"), "552");
+    assert.equal(section.hasAttribute("data-tree-resizing"), false);
+
+    const rendersBeforeCancel = harnessRenders;
+    await act(async () => {
+      cornerHandle.dispatchEvent(pointerEvent("pointerdown", { clientX: 730, clientY: 552 }));
+      cornerHandle.dispatchEvent(pointerEvent("pointermove", { clientX: 500, clientY: 300 }));
+    });
+    await act(async () => {
+      const callbacks = Array.from(pendingFrames.values());
+      pendingFrames.clear();
+      callbacks.forEach((callback) => callback(32));
+    });
+    assert.equal(workspace.style.getPropertyValue("--tree-panel-width"), "500px");
+    assert.equal(section.style.getPropertyValue("--tree-panel-height"), "360px");
+    await act(async () => {
+      cornerHandle.dispatchEvent(pointerEvent("pointercancel", { clientX: 0, clientY: 0 }));
+    });
+    assert.equal(harnessRenders, rendersBeforeCancel);
+    assert.equal(workspace.style.getPropertyValue("--tree-panel-width"), "730px");
+    assert.equal(section.style.getPropertyValue("--tree-panel-height"), "552px");
+    assert.equal(section.hasAttribute("data-tree-resizing"), false);
+
+    await act(async () => {
+      cornerHandle.dispatchEvent(pointerEvent("pointerdown", { clientX: 730, clientY: 552 }));
+      cornerHandle.dispatchEvent(pointerEvent("pointermove", { clientX: 700, clientY: 572 }));
+      cornerHandle.dispatchEvent(pointerEvent("lostpointercapture", { clientX: 0, clientY: 0 }));
+    });
+    assert.equal(workspace.getAttribute("data-width"), "700");
+    assert.equal(workspace.getAttribute("data-height"), "572");
+    assert.equal(section.hasAttribute("data-tree-resizing"), false);
+
+    Object.defineProperty(environment.dom.window, "innerHeight", {
+      configurable: true,
+      value: 500,
+    });
+    await act(async () => {
+      environment.dom.window.dispatchEvent(new Event("resize"));
+    });
+    assert.equal(workspace.getAttribute("data-height"), "364");
+    assert.equal(section.style.getPropertyValue("--tree-panel-max-height"), "364px");
+
+    Object.defineProperty(environment.dom.window, "innerHeight", {
+      configurable: true,
+      value: 420,
+    });
+    await act(async () => {
+      environment.dom.window.dispatchEvent(new Event("orientationchange"));
+    });
+    assert.equal(workspace.getAttribute("data-height"), "284");
+    assert.equal(section.style.getPropertyValue("--tree-panel-max-height"), "284px");
+
+    const css = await readFile(new URL("app/globals.css", workspaceUrl), "utf8");
+    assert.match(css, /@container move-tree-panel \(max-width: 760px\)/);
+    assert.match(css, /height:\s*min\(var\(--tree-panel-height\), var\(--tree-panel-max-height/);
   } finally {
     await act(async () => root.unmount());
     if (previousResizeObserver) {

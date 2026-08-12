@@ -395,6 +395,12 @@ button {
   padding: 18px;
 }
 
+.workspace[data-tree-width-resized="true"] {
+  grid-template-columns:
+    minmax(0, var(--tree-panel-width))
+    minmax(320px, var(--inspector-width));
+}
+
 .tree-section,
 .inspector {
   scroll-margin-top: 18px;
@@ -403,6 +409,21 @@ button {
   border-radius: 18px;
   box-shadow: var(--shadow);
   overflow: hidden;
+}
+
+.tree-section {
+  position: relative;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  container-name: move-tree-panel;
+  container-type: inline-size;
+}
+
+.tree-section[data-tree-height-resized="true"] {
+  height: min(var(--tree-panel-height), var(--tree-panel-max-height, calc(100dvh - 166px)));
+  min-height: min(360px, var(--tree-panel-max-height, calc(100dvh - 166px)));
+  max-height: var(--tree-panel-max-height, calc(100dvh - 166px));
 }
 
 .tree-header {
@@ -479,8 +500,151 @@ button {
   text-align: center;
 }
 
+.tree-variation-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.tree-variation-button {
+  min-height: 34px;
+  padding: 6px 10px;
+  font-size: calc(10px + var(--font-step));
+  white-space: nowrap;
+}
+
+@container move-tree-panel (max-width: 760px) {
+  .tree-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .tree-tools {
+    width: 100%;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    padding-right: 12px;
+  }
+
+  .tree-summary {
+    white-space: normal;
+  }
+
+  .tree-variation-controls {
+    width: 100%;
+  }
+
+  .tree-variation-button {
+    flex: 1 1 150px;
+    white-space: normal;
+  }
+}
+
 .tree-viewport-shell {
   position: relative;
+}
+
+.tree-section[data-tree-height-resized="true"] .tree-viewport-shell {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.tree-section[data-tree-height-resized="true"] .tree-viewport,
+.tree-section[data-tree-height-resized="true"] .tree-empty {
+  height: 100%;
+  min-height: 0;
+}
+
+.tree-resize-handles {
+  position: absolute;
+  inset: 0;
+  z-index: 12;
+  pointer-events: none;
+}
+
+.tree-resize-handle {
+  position: absolute;
+  display: block;
+  min-width: 0;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  pointer-events: auto;
+  touch-action: none;
+}
+
+.tree-resize-handle::after {
+  position: absolute;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--forest) 48%, white);
+  content: "";
+  opacity: 0.72;
+}
+
+.tree-resize-handle:hover::after,
+.tree-resize-handle:focus-visible::after {
+  background: var(--forest);
+  opacity: 1;
+}
+
+.tree-resize-handle:focus-visible {
+  outline: 3px solid var(--forest-2);
+  outline-offset: -3px;
+}
+
+.tree-resize-handle-width {
+  top: 64px;
+  right: 0;
+  bottom: 18px;
+  width: 18px;
+  cursor: ew-resize;
+}
+
+.tree-resize-handle-width::after {
+  top: 50%;
+  right: 5px;
+  width: 4px;
+  height: 76px;
+  transform: translateY(-50%);
+}
+
+.tree-resize-handle-height {
+  right: 18px;
+  bottom: 0;
+  left: 0;
+  height: 18px;
+  cursor: ns-resize;
+}
+
+.tree-resize-handle-height::after {
+  bottom: 5px;
+  left: 50%;
+  width: 76px;
+  height: 4px;
+  transform: translateX(-50%);
+}
+
+.tree-resize-handle-corner {
+  right: 0;
+  bottom: 0;
+  width: 26px;
+  height: 26px;
+  cursor: nwse-resize;
+}
+
+.tree-resize-handle-corner::after {
+  right: 5px;
+  bottom: 5px;
+  width: 13px;
+  height: 13px;
+  border: 0 solid var(--forest);
+  border-right-width: 3px;
+  border-bottom-width: 3px;
+  border-radius: 0 0 5px;
+  background: transparent;
 }
 
 .tree-viewport {
@@ -533,12 +697,20 @@ button {
   border: 1px solid var(--line);
   border-radius: 8px;
   background: #f3f1ea;
-  cursor: crosshair;
+  cursor: none;
+  touch-action: none;
 }
 
 .tree-navigator-map:focus-visible {
   outline: 3px solid var(--forest-2);
   outline-offset: 3px;
+}
+
+.tree-navigator-visual {
+  position: relative;
+  display: block;
+  overflow: hidden;
+  border-radius: 7px;
 }
 
 .tree-navigator svg {
@@ -573,13 +745,61 @@ button {
   pointer-events: none;
 }
 
-.tree-navigator .tree-navigator-selection {
-  fill: none;
-  stroke: var(--rust);
-  stroke-width: 2;
-  opacity: 1;
-  vector-effect: non-scaling-stroke;
+.tree-navigator-lens {
+  --navigator-lens-x: 50%;
+  --navigator-lens-y: 50%;
+  position: absolute;
+  z-index: 2;
+  left: clamp(18px, var(--navigator-lens-x), calc(100% - 24px));
+  top: clamp(18px, var(--navigator-lens-y), calc(100% - 24px));
+  width: 42px;
+  height: 42px;
+  transform: translate(-18px, -18px);
   pointer-events: none;
+}
+
+.tree-navigator-lens-ring {
+  position: absolute;
+  left: 3px;
+  top: 3px;
+  display: grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border: 3px solid var(--rust);
+  border-radius: 50%;
+  background: rgba(255, 254, 249, 0.72);
+  box-shadow: 0 1px 4px rgba(23, 63, 50, 0.3);
+}
+
+.tree-navigator-lens-core {
+  width: 10px;
+  height: 10px;
+  border: 2px solid var(--rust);
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--rust) 24%, transparent);
+}
+
+.tree-navigator-lens-handle {
+  position: absolute;
+  left: 29px;
+  top: 29px;
+  width: 15px;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--rust);
+  transform: rotate(45deg);
+  transform-origin: left center;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 
 .tree-empty {
@@ -1372,6 +1592,9 @@ button {
   .header-main { align-items: flex-start; flex-direction: column; }
   .header-actions { justify-content: flex-start; }
   .workspace { grid-template-columns: 1fr; }
+  .workspace[data-tree-width-resized="true"] { grid-template-columns: 1fr; }
+  .tree-resize-handle-width,
+  .tree-resize-handle-corner { display: none; }
   .inspector { position: static; max-width: var(--inspector-width); width: 100%; margin: 0 auto; }
   .tree-viewport { height: 670px; }
 }
@@ -1389,6 +1612,8 @@ button {
   .workspace { min-height: auto; padding: 10px; }
   .tree-header { align-items: flex-start; flex-direction: column; }
   .tree-tools { width: 100%; flex-wrap: wrap; justify-content: flex-start; }
+  .tree-variation-controls { width: 100%; }
+  .tree-variation-button { flex: 1 1 0; }
   .tree-summary { white-space: normal; }
   .tree-viewport { height: 590px; min-height: 0; }
   .tree-empty { height: 540px; min-height: 0; }

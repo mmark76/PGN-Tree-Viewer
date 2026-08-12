@@ -4,12 +4,20 @@ import {
   COLLAPSE_CONTROL_NODE_OFFSET,
   getCollapseControlPosition,
   getNavigatorKeyCommand,
+  getNavigatorLensPercentage,
+  getNavigatorTreePoint,
   getTreeKeyboardAction,
   getVisibleTreeItems,
   MIN_POINTER_COLLAPSE_ZOOM,
   shouldShowPointerCollapseControls,
 } from "../features/explorer/services/treeNavigation";
 import type { TreeNode } from "../features/explorer/types";
+import {
+  canShrinkVariations,
+  expandableNodeIds,
+  sameCollapsedBranches,
+  shrinkVariationIds,
+} from "../features/explorer/services/treeVariations";
 
 const emptyResults = () => ({ white: 0, draw: 0, black: 0, unknown: 0 });
 
@@ -125,4 +133,67 @@ test("pointer collapse controls stay unscaled at the readable zoom boundary", ()
     left: 100 * 0.67,
     top: (200 + 30) * 0.67,
   });
+});
+
+test("navigator coordinates map exactly and clamp the moving lens to its bounds", () => {
+  const bounds = { left: 10, top: 20, width: 200, height: 100 };
+  assert.deepEqual(getNavigatorTreePoint(bounds, 110, 70, 860, 650), { x: 430, y: 325 });
+  assert.deepEqual(getNavigatorTreePoint(bounds, -100, 500, 860, 650), { x: 0, y: 650 });
+  assert.equal(getNavigatorTreePoint({ ...bounds, width: 0 }, 10, 20, 860, 650), null);
+  assert.equal(getNavigatorTreePoint(bounds, Number.NaN, 20, 860, 650), null);
+  assert.equal(getNavigatorLensPercentage(-10, 860), 0);
+  assert.equal(getNavigatorLensPercentage(430, 860), 50);
+  assert.equal(getNavigatorLensPercentage(900, 860), 100);
+  assert.equal(getNavigatorLensPercentage(Number.NaN, 860), 50);
+});
+
+test("recursive expand and shrink retain a visible selected path", () => {
+  const root = fixtureTree();
+  const expandable = expandableNodeIds(root);
+  assert.deepEqual([...expandable], ["start", "a", "a1"]);
+
+  const selectedVariation = shrinkVariationIds(root, "a2");
+  const treeIndex = new Map<string, TreeNode>();
+  const index = (item: TreeNode) => {
+    treeIndex.set(item.id, item);
+    item.children.forEach(index);
+  };
+  index(root);
+  assert.equal(canShrinkVariations(treeIndex, expandable, new Set(), root.id, "a2"), true);
+  assert.equal(
+    canShrinkVariations(treeIndex, expandable, selectedVariation, root.id, "a2"),
+    false,
+  );
+  assert.deepEqual([...selectedVariation], ["a1"]);
+  assert.deepEqual(
+    getVisibleTreeItems(root, selectedVariation).map(({ node: item }) => item.id),
+    ["start", "a", "a1", "a2", "b"],
+  );
+  assert.equal(
+    getVisibleTreeItems(root, selectedVariation).some(({ node: item }) => item.id === "a2"),
+    true,
+  );
+
+  const selectedBranch = shrinkVariationIds(root, "a");
+  assert.deepEqual([...selectedBranch], ["a", "a1"]);
+  assert.deepEqual(
+    getVisibleTreeItems(root, selectedBranch).map(({ node: item }) => item.id),
+    ["start", "a", "b"],
+  );
+  assert.equal(
+    getVisibleTreeItems(root, selectedBranch).some(({ node: item }) => item.id === "a"),
+    true,
+  );
+
+  const selectedRoot = shrinkVariationIds(root, "start");
+  assert.deepEqual([...selectedRoot], ["start", "a", "a1"]);
+  assert.deepEqual(
+    getVisibleTreeItems(root, selectedRoot).map(({ node: item }) => item.id),
+    ["start"],
+  );
+  assert.equal(sameCollapsedBranches(new Set(), selectedRoot, expandable), false);
+  assert.equal(sameCollapsedBranches(new Set(["start", "a", "a1"]), selectedRoot, expandable), true);
+
+  const missingSelection = shrinkVariationIds(root, "missing");
+  assert.deepEqual([...missingSelection], ["start", "a", "a1"]);
 });
