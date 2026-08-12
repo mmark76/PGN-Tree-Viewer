@@ -3,10 +3,15 @@ import test from "node:test";
 import {
   calculateTreeResizeBounds,
   clampTreePanelSize,
+  DEFAULT_TREE_PANEL_SIZE,
   resizeTreePanel,
   resizeTreePanelFromKey,
   TREE_RESIZE_KEYBOARD_STEP,
 } from "../features/explorer/services/treePanelResize";
+
+test("uses the screenshot-sized move-tree frame by default", () => {
+  assert.deepEqual(DEFAULT_TREE_PANEL_SIZE, { width: null, height: 590 });
+});
 
 const bounds = { minWidth: 360, maxWidth: 920, minHeight: 360, maxHeight: 800 };
 
