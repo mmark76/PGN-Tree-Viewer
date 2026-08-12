@@ -29,6 +29,28 @@ function requiredExpandedAncestorIds(
   return requiredExpanded;
 }
 
+function requiredMainLineExpandedIds(index: TreeIndex, rootId: string) {
+  const requiredExpanded = new Set<string>();
+  const visited = new Set<string>();
+  let current = index.get(rootId);
+
+  while (current && !visited.has(current.id) && current.children.length) {
+    visited.add(current.id);
+    requiredExpanded.add(current.id);
+    const mainLineChild = current.children[0];
+    current = index.get(mainLineChild.id) ?? mainLineChild;
+  }
+
+  return requiredExpanded;
+}
+
+function requiredExpandedIds(index: TreeIndex, rootId: string, selectedId: string) {
+  const requiredExpanded = requiredMainLineExpandedIds(index, rootId);
+  requiredExpandedAncestorIds(index, rootId, selectedId)
+    .forEach((id) => requiredExpanded.add(id));
+  return requiredExpanded;
+}
+
 export function shrinkVariationIdsFromIndex(
   index: TreeIndex,
   expandableIds: ReadonlySet<string>,
@@ -36,7 +58,7 @@ export function shrinkVariationIdsFromIndex(
   selectedId: string,
 ) {
   const collapsed = new Set(expandableIds);
-  requiredExpandedAncestorIds(index, rootId, selectedId)
+  requiredExpandedIds(index, rootId, selectedId)
     .forEach((id) => collapsed.delete(id));
   return collapsed;
 }
@@ -48,7 +70,7 @@ export function canShrinkVariations(
   rootId: string,
   selectedId: string,
 ) {
-  const requiredExpanded = requiredExpandedAncestorIds(index, rootId, selectedId);
+  const requiredExpanded = requiredExpandedIds(index, rootId, selectedId);
   for (const id of expandableIds) {
     if (collapsedIds.has(id) !== !requiredExpanded.has(id)) return true;
   }
@@ -58,10 +80,9 @@ export function canShrinkVariations(
 /**
  * Produces a compact main view without hiding the selected move.
  *
- * The visible spine follows the root-to-selection path. The selected node is
- * allowed to collapse its own continuation, because the node itself remains
- * visible; only strict ancestors must stay expanded. Every other expandable
- * node remains visible at its branch entry, but its descendants are collapsed.
+ * The visible spine always includes the complete main line (the first child at
+ * each ply) as well as the root-to-selection path. Every other expandable node
+ * remains visible at its branch entry, but its descendants are collapsed.
  */
 export function shrinkVariationIds(root: TreeNode, selectedId: string) {
   const index = new Map<string, TreeNode>();

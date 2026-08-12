@@ -279,15 +279,9 @@ test("mounted editing flow promotes exactly once, confirms replacement, preserve
     const expandVariations = buttonNamed("Expand Variations");
     const shrinkVariations = buttonNamed("Shrink Variations");
     assert.equal(expandVariations.disabled, true);
-    assert.equal(shrinkVariations.disabled, false);
-    await click(shrinkVariations);
-    assert.equal(document.querySelectorAll('[role="treeitem"]').length, 1);
-    assert.equal(rootTreeItem()?.getAttribute("aria-selected"), "true");
     assert.equal(shrinkVariations.disabled, true);
-    assert.equal(expandVariations.disabled, false);
-    await click(expandVariations);
     assert.equal(document.querySelectorAll('[role="treeitem"]').length, 2);
-    assert.equal(expandVariations.disabled, true);
+    assert.equal(rootTreeItem()?.getAttribute("aria-selected"), "true");
 
     clipboardValue = "Kb2";
     await click(buttonNamed("Paste SAN / PGN"));
