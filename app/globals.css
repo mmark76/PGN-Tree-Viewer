@@ -1540,11 +1540,99 @@ button {
   gap: 16px;
 }
 
-.footer-main a {
+.footer-main a,
+.footer-main .analytics-choice-button {
   color: #354052;
   font-size: 12px;
   text-underline-offset: 3px;
 }
+
+.footer-main .analytics-choice-button {
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+  text-decoration: underline;
+}
+
+.footer-main .analytics-choice-button:hover,
+.footer-main .analytics-choice-button:focus-visible {
+  color: var(--forest);
+}
+
+.analytics-consent {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  left: 16px;
+  z-index: 140;
+  display: flex;
+  width: min(920px, calc(100% - 32px));
+  margin: 0 auto;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 18px 20px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 22px 64px rgba(26, 39, 32, 0.22);
+}
+
+.analytics-consent h2 {
+  margin: 0 0 5px;
+  color: var(--ink);
+  font-size: 16px;
+}
+
+.analytics-consent p {
+  max-width: 650px;
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.analytics-consent-actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.analytics-consent-actions button {
+  min-height: 38px;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--ink);
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.analytics-consent-actions button:hover,
+.analytics-consent-actions button:focus-visible {
+  border-color: var(--forest);
+}
+
+.analytics-consent-actions .analytics-consent-allow {
+  border-color: var(--forest);
+  background: var(--forest);
+  color: #fff;
+}
+
+.analytics-consent-actions .analytics-consent-close {
+  display: grid;
+  width: 38px;
+  padding: 0;
+  place-items: center;
+  font-size: 16px;
+}
+
 
 .footer-main small {
   font-family: var(--font-geist-mono), monospace;
@@ -1585,6 +1673,18 @@ button {
   .tree-navigator svg { height: 86px; }
   .privacy-strip { align-items: flex-start; justify-content: flex-start; padding: 12px 14px; }
   .footer-main { padding: 18px 14px 15px; }
+  .analytics-consent {
+    right: 10px;
+    bottom: 10px;
+    left: 10px;
+    width: auto;
+    align-items: stretch;
+    flex-direction: column;
+    gap: 12px;
+    padding: 15px;
+  }
+  .analytics-consent-actions { flex-wrap: wrap; }
+  .analytics-consent-actions button:not(.analytics-consent-close) { flex: 1 1 140px; }
   .settings-backdrop { align-items: end; padding: 10px; }
   .settings-dialog { max-height: calc(100vh - 20px); border-radius: 17px; }
   .settings-head { padding: 17px 16px 14px; }
