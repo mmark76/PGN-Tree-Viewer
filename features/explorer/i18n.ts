@@ -133,6 +133,12 @@ export const messages = {
     privacy: "Τα αρχεία PGN και JSON επεξεργάζονται τοπικά σε αυτό το πρόγραμμα περιήγησης και δεν μεταφορτώνονται σε διακομιστή.",
     footerNavigation: "Σύνδεσμοι υποσέλιδου",
     ecosystem: "Markellos Ecosystem",
+    analyticsChoices: "Επιλογές analytics",
+    analyticsTitle: "Επιλογές analytics",
+    analyticsDescription: "Το Google Analytics βοηθά στη μέτρηση επισκέψεων και χρήσης της εφαρμογής. Η αποθήκευση analytics παραμένει απενεργοποιημένη εκτός αν την επιτρέψετε. Οι διαφημιστικές λειτουργίες παραμένουν απενεργοποιημένες.",
+    analyticsNecessary: "Μόνο απαραίτητα",
+    analyticsAllow: "Επιτρέπω analytics",
+    analyticsClose: "Κλείσιμο επιλογών analytics",
   },
   en: {
     eyebrow: "YOUR PRIVATE CHESS STUDY SPACE",
@@ -264,6 +270,12 @@ export const messages = {
     privacy: "PGN and JSON files are processed locally in this browser and are not uploaded to a server.",
     footerNavigation: "Footer links",
     ecosystem: "Markellos Ecosystem",
+    analyticsChoices: "Analytics choices",
+    analyticsTitle: "Analytics choices",
+    analyticsDescription: "Google Analytics helps measure visits and application use. Analytics storage stays disabled unless you allow it. Advertising features remain disabled.",
+    analyticsNecessary: "Necessary only",
+    analyticsAllow: "Allow analytics",
+    analyticsClose: "Close analytics choices",
   },
 } as const;
 
