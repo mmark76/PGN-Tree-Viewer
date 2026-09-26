@@ -1,33 +1,33 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import { messages } from "../i18n";
 import type { Locale } from "../i18n";
 import {
+  getAnalyticsConsentSnapshot,
   initializeAnalytics,
-  readAnalyticsConsent,
   setAnalyticsConsent,
+  subscribeAnalyticsConsent,
   type AnalyticsConsent,
 } from "../services/analyticsConsent";
 
 export function AnalyticsConsentControl({ locale }: { locale: Locale }) {
   const text = messages[locale];
-  const [ready, setReady] = useState(false);
-  const [open, setOpen] = useState(false);
-  const [consent, setConsentState] = useState<AnalyticsConsent | null>(null);
+  const [forceOpen, setForceOpen] = useState(false);
+  const consent = useSyncExternalStore(
+    subscribeAnalyticsConsent,
+    getAnalyticsConsentSnapshot,
+    () => null,
+  );
+  const open = forceOpen || consent === null;
 
   useEffect(() => {
     initializeAnalytics();
-    const stored = readAnalyticsConsent();
-    setConsentState(stored);
-    setOpen(stored === null);
-    setReady(true);
   }, []);
 
   const choose = (nextConsent: AnalyticsConsent) => {
     setAnalyticsConsent(nextConsent);
-    setConsentState(nextConsent);
-    setOpen(false);
+    setForceOpen(false);
   };
 
   return (
@@ -35,12 +35,12 @@ export function AnalyticsConsentControl({ locale }: { locale: Locale }) {
       <button
         className="analytics-choice-button"
         type="button"
-        onClick={() => setOpen(true)}
+        onClick={() => setForceOpen(true)}
       >
         {text.analyticsChoices}
       </button>
 
-      {ready && open ? (
+      {open ? (
         <aside
           className="analytics-consent"
           role="dialog"
@@ -67,7 +67,7 @@ export function AnalyticsConsentControl({ locale }: { locale: Locale }) {
                 type="button"
                 aria-label={text.analyticsClose}
                 title={text.analyticsClose}
-                onClick={() => setOpen(false)}
+                onClick={() => setForceOpen(false)}
               >
                 ×
               </button>
