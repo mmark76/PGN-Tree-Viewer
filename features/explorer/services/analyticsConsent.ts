@@ -2,6 +2,7 @@ export type AnalyticsConsent = "granted" | "denied";
 
 export const GA4_MEASUREMENT_ID = "G-DK5WN8TH3Z";
 export const ANALYTICS_CONSENT_STORAGE_KEY = "chesstree.analyticsConsent.v1";
+const ANALYTICS_CONSENT_EVENT = "chesstree:analytics-consent-change";
 
 type StorageLike = Pick<Storage, "getItem" | "setItem">;
 
@@ -77,6 +78,23 @@ function applyAnalyticsConsent(consent: AnalyticsConsent | null) {
 export function setAnalyticsConsent(consent: AnalyticsConsent) {
   persistAnalyticsConsent(consent);
   applyAnalyticsConsent(consent);
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new Event(ANALYTICS_CONSENT_EVENT));
+  }
+}
+
+export function subscribeAnalyticsConsent(listener: () => void) {
+  if (typeof window === "undefined") return () => {};
+  window.addEventListener(ANALYTICS_CONSENT_EVENT, listener);
+  window.addEventListener("storage", listener);
+  return () => {
+    window.removeEventListener(ANALYTICS_CONSENT_EVENT, listener);
+    window.removeEventListener("storage", listener);
+  };
+}
+
+export function getAnalyticsConsentSnapshot() {
+  return readAnalyticsConsent();
 }
 
 export function initializeAnalytics() {
