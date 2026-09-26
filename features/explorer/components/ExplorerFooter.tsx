@@ -1,5 +1,6 @@
 import { messages } from "../i18n";
 import type { Locale } from "../i18n";
+import { AnalyticsConsentControl } from "./AnalyticsConsentControl";
 
 export function ExplorerFooter({ locale }: { locale: Locale }) {
   const text = messages[locale];
@@ -14,6 +15,7 @@ export function ExplorerFooter({ locale }: { locale: Locale }) {
         <p>© 2026 Markellos Markides. All rights reserved.</p>
         <nav aria-label={text.footerNavigation}>
           <a href="https://markellosecosystem.com/">{text.ecosystem}</a>
+          <AnalyticsConsentControl locale={locale} />
         </nav>
         <small>{__BUILD_VERSION__}</small>
       </div>
