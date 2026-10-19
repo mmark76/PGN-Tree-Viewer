@@ -1,12 +1,13 @@
 import { messages } from "../i18n";
 import type { Locale } from "../i18n";
-import { AnalyticsConsentControl } from "./AnalyticsConsentControl";
+import { CookieLessAnalytics } from "./CookieLessAnalytics";
 
 export function ExplorerFooter({ locale }: { locale: Locale }) {
   const text = messages[locale];
 
   return (
     <footer className="site-footer">
+      <CookieLessAnalytics />
       <div className="privacy-strip">
         <span aria-hidden="true">ⓘ</span>
         <p>{text.privacy}</p>
@@ -15,7 +16,7 @@ export function ExplorerFooter({ locale }: { locale: Locale }) {
         <p>© 2026 Markellos Markides. All rights reserved.</p>
         <nav aria-label={text.footerNavigation}>
           <a href="https://markellosecosystem.com/">{text.ecosystem}</a>
-          <AnalyticsConsentControl locale={locale} />
+          <span>{text.analyticsInfo}</span>
         </nav>
         <small>{__BUILD_VERSION__}</small>
       </div>

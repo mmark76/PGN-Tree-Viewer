@@ -1,37 +1,14 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import {
-  ANALYTICS_CONSENT_STORAGE_KEY,
-  GA4_MEASUREMENT_ID,
-  persistAnalyticsConsent,
-  readAnalyticsConsent,
-} from "../features/explorer/services/analyticsConsent";
+import { readFile } from "node:fs/promises";
 
-class MemoryStorage {
-  values = new Map<string, string>();
+test("cookie-less analytics is limited to the production hostname", async () => {
+  const source = await readFile(
+    new URL("../features/explorer/components/CookieLessAnalytics.tsx", import.meta.url),
+    "utf8",
+  );
 
-  getItem(key: string) {
-    return this.values.get(key) ?? null;
-  }
-
-  setItem(key: string, value: string) {
-    this.values.set(key, String(value));
-  }
-}
-
-test("GA4 consent persists and reads valid choices", () => {
-  const storage = new MemoryStorage();
-
-  assert.equal(GA4_MEASUREMENT_ID, "G-DK5WN8TH3Z");
-  assert.equal(readAnalyticsConsent(storage), null);
-
-  assert.equal(persistAnalyticsConsent("granted", storage), true);
-  assert.equal(storage.getItem(ANALYTICS_CONSENT_STORAGE_KEY), "granted");
-  assert.equal(readAnalyticsConsent(storage), "granted");
-
-  assert.equal(persistAnalyticsConsent("denied", storage), true);
-  assert.equal(readAnalyticsConsent(storage), "denied");
-
-  storage.setItem(ANALYTICS_CONSENT_STORAGE_KEY, "invalid");
-  assert.equal(readAnalyticsConsent(storage), null);
+  assert.match(source, /chesstree\.markellosecosystem\.com/);
+  assert.match(source, /analytics\.markellosecosystem\.com\/v1\/script\.js/);
+  assert.doesNotMatch(source, /googletagmanager|G-DK5WN8TH3Z|localStorage|consent/i);
 });
