@@ -1,6 +1,7 @@
 import { messages } from "../i18n";
 import type { Locale } from "../i18n";
 import { CookieLessAnalytics } from "./CookieLessAnalytics";
+import { AnalyticsNotice } from "./AnalyticsNotice";
 
 export function ExplorerFooter({ locale }: { locale: Locale }) {
   const text = messages[locale];
@@ -17,6 +18,7 @@ export function ExplorerFooter({ locale }: { locale: Locale }) {
         <nav aria-label={text.footerNavigation}>
           <a href="https://markellosecosystem.com/">{text.ecosystem}</a>
           <span>{text.analyticsInfo}</span>
+          <AnalyticsNotice locale={locale} />
         </nav>
         <small>{__BUILD_VERSION__}</small>
       </div>
