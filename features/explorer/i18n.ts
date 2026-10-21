@@ -134,6 +134,11 @@ export const messages = {
     footerNavigation: "Σύνδεσμοι υποσέλιδου",
     ecosystem: "Markellos Ecosystem",
     analyticsInfo: "Analytics χωρίς cookies: μόνο συγκεντρωτικές μετρήσεις ανά ώρα UTC, domain και χώρα για την κατανόηση της επισκεψιμότητας από τον διαχειριστή.",
+    analyticsInfoButton: "Πληροφορίες analytics",
+    analyticsNoticeTitle: "Πληροφορίες cookie-less analytics",
+    analyticsNoticeDescription: "Η εφαρμογή χρησιμοποιεί μόνο συγκεντρωτικές μετρήσεις επισκεψιμότητας χωρίς cookies.",
+    analyticsNoticeDetails: "Οι μετρήσεις περιορίζονται σε ώρα UTC, domain, χώρα και συνολικό αριθμό προβολών, αποκλειστικά για την κατανόηση της συνολικής επισκεψιμότητας από τον διαχειριστή. Δεν χρησιμοποιούνται για άλλο σκοπό.",
+    closeAnalyticsNotice: "Κλείσιμο",
   },
   en: {
     eyebrow: "YOUR PRIVATE CHESS STUDY SPACE",
@@ -266,6 +271,11 @@ export const messages = {
     footerNavigation: "Footer links",
     ecosystem: "Markellos Ecosystem",
     analyticsInfo: "Cookie-less analytics: aggregate counts only by UTC hour, domain and country, solely to help the administrator understand overall traffic.",
+    analyticsInfoButton: "Analytics information",
+    analyticsNoticeTitle: "Cookie-less analytics information",
+    analyticsNoticeDescription: "This application uses only aggregate traffic measurements without cookies.",
+    analyticsNoticeDetails: "Measurements are limited to UTC hour, domain, country and total page-view count, solely to help the administrator understand overall traffic. They are not used for any other purpose.",
+    closeAnalyticsNotice: "Close",
   },
 } as const;
 

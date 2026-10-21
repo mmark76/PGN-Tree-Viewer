@@ -1520,6 +1520,27 @@ button {
   line-height: 1.5;
 }
 
+.analytics-info-button {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--forest-2);
+  cursor: pointer;
+  font-size: inherit;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.analytics-info-button:focus-visible {
+  outline: 2px solid var(--forest);
+  outline-offset: 3px;
+}
+
+.analytics-notice-body p {
+  margin: 0;
+  line-height: 1.6;
+}
+
 .footer-main {
   display: grid;
   justify-items: center;
